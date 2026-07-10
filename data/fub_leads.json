@@ -1,0 +1,98 @@
+{
+  "_comment": "Auto-populated by the cinc-lead-check scheduled task every 2 hours. Do not edit manually.",
+  "leads": [
+    {
+      "id": "cinc-leslie-borse",
+      "name": "Leslie Borse",
+      "email": "llborse61@gmail.com",
+      "phone": "+1 778-240-3541",
+      "source": "CINC / Google",
+      "stage": "New Lead",
+      "receivedAt": "2026-06-24T14:08:38-07:00",
+      "notes": "",
+      "assignedTo": "Aaron",
+      "budget": "",
+      "crmUrl": ""
+    },
+    {
+      "id": "cinc-dori-sawatzky",
+      "name": "Dori Sawatzky",
+      "email": "dorisawatzky@gmail.com",
+      "phone": "+1 780-940-7419",
+      "source": "CINC / Google",
+      "stage": "New Lead",
+      "receivedAt": "2026-06-23T21:01:18-07:00",
+      "notes": "",
+      "assignedTo": "Aaron",
+      "budget": "",
+      "crmUrl": ""
+    },
+    {
+      "id": "cinc-sheila-sullivan",
+      "name": "Sheila Sullivan",
+      "email": "sullivan_s@surreyschools.ca",
+      "phone": "",
+      "source": "CINC / Google",
+      "stage": "New Lead",
+      "receivedAt": "2026-06-22T18:26:49-07:00",
+      "notes": "",
+      "assignedTo": "Aaron",
+      "budget": "",
+      "crmUrl": ""
+    },
+    {
+      "id": "cinc-antoine-chammas",
+      "name": "Antoine Chammas",
+      "email": "antoinegypt@gmail.com",
+      "phone": "+1 416-286-7870",
+      "source": "CINC / Google",
+      "stage": "New Lead",
+      "receivedAt": "2026-06-22T06:44:35-07:00",
+      "notes": "",
+      "assignedTo": "Aaron",
+      "budget": "",
+      "crmUrl": ""
+    },
+    {
+      "id": "cinc-adriana-storelli",
+      "name": "Adriana Storelli",
+      "email": "adrianastorelli@msn.com",
+      "phone": "+1 604-224-5355",
+      "source": "CINC / Google",
+      "stage": "New Lead",
+      "receivedAt": "2026-06-21T18:51:20-07:00",
+      "notes": "",
+      "assignedTo": "Aaron",
+      "budget": "",
+      "crmUrl": ""
+    },
+    {
+      "id": "cinc-helen-hossie",
+      "name": "Helen Hossie",
+      "email": "hossiehelen@gmail.com",
+      "phone": "+1 604-339-7957",
+      "source": "CINC / Google",
+      "stage": "New Lead",
+      "receivedAt": "2026-06-19T14:30:00-07:00",
+      "notes": "",
+      "assignedTo": "Aaron",
+      "budget": "",
+      "crmUrl": ""
+    },
+    {
+      "id": "cinc-naresh-dewett",
+      "name": "Naresh K Dewett",
+      "email": "nareshdewett@gmail.com",
+      "phone": "+1 250-882-7876",
+      "source": "CINC / Google",
+      "stage": "New Lead",
+      "receivedAt": "2026-06-17T19:57:49-07:00",
+      "notes": "",
+      "assignedTo": "Aaron",
+      "budget": "",
+      "crmUrl": ""
+    }
+  ],
+  "lastUpdated": "2026-06-25T16:35:00-07:00",
+  "source": "CINC via Zapier MCP"
+}

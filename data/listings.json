@@ -1,0 +1,50 @@
+{
+  "_comment": "Edit this file to add your active listings and prospects. The dashboard reads it automatically.",
+  "listings": [
+    {
+      "id": "example-1",
+      "address": "15234 Example Ave, South Surrey",
+      "mlsNumber": "R2000000",
+      "status": "Active",
+      "listPrice": 1250000,
+      "listDate": "2026-06-01",
+      "offerReviewDate": "",
+      "openHouseDate": "",
+      "openHouseTime": "",
+      "photoSessionDate": "",
+      "stagingDate": "",
+      "conditionalDate": "",
+      "completionDate": "",
+      "notes": "Replace this with your actual listing data",
+      "buyerAgent": "",
+      "daysOnMarket": 23,
+      "priceReductionThreshold": 30,
+      "showings": [
+        {
+          "date": "2026-06-20",
+          "agent": "Example Agent",
+          "feedbackStatus": "pending"
+        },
+        {
+          "date": "2026-06-22",
+          "agent": "Another Agent",
+          "feedbackStatus": "received",
+          "feedbackSummary": "Loved the kitchen, concerned about backyard size"
+        }
+      ]
+    }
+  ],
+  "prospects": [
+    {
+      "id": "prospect-1",
+      "name": "Example Buyer",
+      "type": "Buyer",
+      "status": "Active",
+      "nextAction": "Follow up call",
+      "nextActionDate": "2026-06-26",
+      "budget": "1.1M–1.4M",
+      "notes": "Replace with real prospect data"
+    }
+  ],
+  "lastUpdated": "2026-06-24T00:00:00-07:00"
+}

@@ -1,0 +1,20 @@
+{
+  "_comment": "Update annual goals and closed deals here. The dashboard computes pace automatically.",
+  "year": 2026,
+  "goals": {
+    "deals": 24,
+    "volume": 28000000,
+    "gci": 350000
+  },
+  "closedDeals": [
+    {
+      "id": "closed-example-1",
+      "address": "Example — replace with your actual closed deal",
+      "salePrice": 1150000,
+      "closeDate": "2026-03-15",
+      "side": "Sell",
+      "commission": 17250
+    }
+  ],
+  "lastUpdated": "2026-06-24"
+}

@@ -1,0 +1,35 @@
+{
+  "tasks": [
+    {
+      "id": "canada-real-estate-news-report",
+      "label": "Canadian Real Estate News",
+      "schedule": "Mon / Wed / Fri at 8:02 AM",
+      "lastRun": "2026-06-10",
+      "nextRun": "2026-06-26",
+      "enabled": true,
+      "reportDir": "~/Desktop/Claude/Projects/Auto/Workspace/",
+      "reportPattern": "real-estate-report-"
+    },
+    {
+      "id": "friday-fraser-valley-shortlist",
+      "label": "Friday Fraser Valley Shortlist",
+      "schedule": "Fridays at 7:09 AM",
+      "lastRun": "2026-06-05",
+      "nextRun": "2026-06-26",
+      "enabled": true,
+      "reportDir": "~/Desktop/Claude/Projects/Auto/Workspace/",
+      "reportPattern": "fraser-valley-shortlist-"
+    },
+    {
+      "id": "monday-weekend-recap-prep",
+      "label": "Monday Weekend Recap Prep",
+      "schedule": "Mondays at 6:35 AM",
+      "lastRun": "2026-05-11",
+      "nextRun": "2026-06-29",
+      "enabled": true,
+      "reportDir": "~/Desktop/Claude/Projects/Auto/Workspace/",
+      "reportPattern": "weekend-recap-"
+    }
+  ],
+  "lastUpdated": "2026-06-25T07:05:29-07:00"
+}

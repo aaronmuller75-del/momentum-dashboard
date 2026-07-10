@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aaron Müller — Realtor Dashboard</title>
+<script>
+  // If opened as a local file, redirect to the server so localStorage stays consistent
+  if (location.protocol === 'file:') {
+    location.replace('http://localhost:5678/dashboard.html');
+  }
+</script>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#002072">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Momentum Dashboard">
+<style>
+:root {
+  /* ── Momentum Brand Colours ── */
+  --brand-blue:   #002072;   /* Deep Blue — primary */
+  --brand-coral:  #F06060;   /* Coral — accent */
+  --brand-grey:   #EEEEEC;   /* Light Grey — secondary bg */
+  --brand-charcoal: #202020; /* Charcoal — body text */
+
+  /* ── Dashboard Tokens ── */
+  --bg:       #EEEEEC;       /* Light Grey page bg */
+  --surface:  #ffffff;
+  --surface2: #F7F7F6;
+  --surface3: #EEEEEC;
+  --border:   #D8D8D6;
+  --accent:   #002072;       /* Deep Blue as primary accent */
+  --green:    #1A7F4B;
+  --amber:    #C47A10;
+  --red:      #C53030;
+  --purple:   #6B31C0;
+  --pink:     #C0286B;
+  --teal:     #0D7A74;
+  --text:     #202020;       /* Charcoal */
+  --muted:    #6B6B69;
+  --label:    #9B9B99;
+  --radius:   10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── MARKET PULSE BANNER ── */
+.pulse-banner {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  gap: 0;
+}
+.pulse-item {
+  padding: 10px 18px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pulse-item:last-child { border-right: none; }
+.pulse-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.pulse-value { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+.pulse-change { font-size: 0.68rem; }
+.up { color: var(--green); }
+.dn { color: var(--red); }
+.neutral { color: var(--muted); }
+.pulse-src { font-size: 0.6rem; color: var(--muted); margin-left: auto; padding: 10px 0 10px 12px; align-self: center; }
+
+/* ── TOP BAR ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; background: var(--brand-blue); border-bottom: none;
+  position: sticky; top: 0; z-index: 100; min-height: 56px;
+}
+.topbar-logo { display: flex; align-items: center; gap: 14px; }
+.topbar-logo svg { height: 28px; width: auto; }
+.topbar-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.25); }
+.topbar-subtitle { font-size: 0.72rem; font-weight: 500; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,0.65); }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-date { font-size: 0.75rem; color: rgba(255,255,255,0.75); padding: 3px 10px; background: rgba(255,255,255,0.12); border-radius: 20px; border: 1px solid rgba(255,255,255,0.2); }
+.refresh-btn { font-size: 0.72rem; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; padding: 5px 11px; cursor: pointer; transition: background .15s; }
+.refresh-btn:hover { background: rgba(255,255,255,0.22); color: #fff; }
+.last-upd { font-size: 0.68rem; color: rgba(255,255,255,0.5); }
+
+/* ── GRID ── */
+.grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; padding: 14px 18px 24px; max-width: 1700px; margin: 0 auto; }
+
+/* ── CARD ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04); }
+.card-wide { grid-column: span 2; }
+.card-full { grid-column: span 3; }
+
+/* ── TABLET (iPad landscape ~1024px) ── */
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 20px; }
+  .card-wide { grid-column: span 2; }
+  .card-full { grid-column: span 2; }
+  #bodyCompetitors { grid-template-columns: 1fr 1fr !important; }
+  .stats-bar { grid-template-columns: repeat(3, 1fr); }
+  .stat-item:nth-child(3) { border-right: none; }
+  .stat-item:nth-child(4) { border-top: 1px solid rgba(255,255,255,0.12); }
+  .stat-item:nth-child(5) { border-top: 1px solid rgba(255,255,255,0.12); }
+  .stat-item:nth-child(6) { border-top: 1px solid rgba(255,255,255,0.12); border-right: none; }
+}
+
+/* ── MOBILE / iPad portrait (~768px) ── */
+@media (max-width: 800px) {
+  .grid { grid-template-columns: 1fr; gap: 10px; padding: 10px 10px 20px; }
+  .card-wide { grid-column: span 1; }
+  .card-full { grid-column: span 1; }
+  #bodyCompetitors { grid-template-columns: 1fr !important; }
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  .stat-item:nth-child(2) { border-right: none; }
+  .stat-item:nth-child(3) { border-top: 1px solid rgba(255,255,255,0.12); }
+  .stat-item:nth-child(4) { border-top: 1px solid rgba(255,255,255,0.12); border-right: none; }
+  .stat-item:nth-child(5) { border-top: 1px solid rgba(255,255,255,0.12); }
+  .stat-item:nth-child(6) { border-top: 1px solid rgba(255,255,255,0.12); border-right: none; }
+  .topbar { padding: 0 14px; min-height: 50px; }
+  .topbar-logo svg { height: 22px; }
+  .topbar-subtitle { font-size: 0.65rem; }
+  .pulse-banner { overflow-x: auto; }
+  .volume-grid { grid-template-columns: 1fr 1fr !important; }
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 9px; border-bottom: 1px solid var(--border); border-left: 3px solid var(--brand-coral); }
+.card-title { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-coral); display: inline-block; flex-shrink: 0; }
+.dot.g { background: var(--green); } .dot.a { background: var(--amber); } .dot.r { background: var(--red); }
+.dot.p { background: var(--purple); } .dot.t { background: var(--brand-blue); } .dot.pk { background: var(--pink); }
+.card-count { font-size: 0.7rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 2px 8px; color: var(--muted); }
+.card-scroll { max-height: 290px; overflow-y: auto; }
+.card-scroll::-webkit-scrollbar { width: 3px; }
+.card-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.empty { padding: 18px; text-align: center; color: var(--muted); font-size: 0.8rem; }
+
+/* ── STATS BAR ── */
+.stats-bar { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--brand-blue); border: 1px solid var(--brand-blue); border-radius: var(--radius); overflow: hidden; }
+.stat-item { padding: 12px 14px; border-right: 1px solid rgba(255,255,255,0.12); text-align: center; }
+.stat-item:last-child { border-right: none; }
+.stat-value { font-size: 1.5rem; font-weight: 700; color: #ffffff; line-height: 1; margin-bottom: 3px; }
+.stat-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.6); }
+
+/* ── LISTING ROW ── */
+.listing-row { padding: 11px 14px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: start; }
+.listing-row:last-child { border-bottom: none; }
+.listing-row:hover { background: var(--surface2); }
+.listing-address { font-size: 0.85rem; font-weight: 600; color: var(--text); margin-bottom: 1px; }
+.listing-mls { font-size: 0.7rem; color: var(--muted); margin-bottom: 5px; }
+.listing-price { font-size: 0.78rem; color: var(--green); font-weight: 600; }
+.listing-dates { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.date-pill { font-size: 0.68rem; padding: 2px 7px; border-radius: 10px; border: 1px solid; white-space: nowrap; }
+.dp-offer  { background: rgba(59,130,246,.1); border-color: rgba(59,130,246,.35); color: #1d4ed8; }
+.dp-open   { background: rgba(5,150,105,.1);  border-color: rgba(5,150,105,.35);  color: #065f46; }
+.dp-comp   { background: rgba(217,119,6,.1);  border-color: rgba(217,119,6,.35);  color: #92400e; }
+.dp-photo  { background: rgba(109,40,217,.1); border-color: rgba(109,40,217,.35); color: #5b21b6; }
+.dp-stage  { background: rgba(190,24,93,.1);  border-color: rgba(190,24,93,.35);  color: #9d174d; }
+.dp-cond   { background: rgba(220,38,38,.1);  border-color: rgba(220,38,38,.35);  color: #991b1b; }
+.dom-badge { font-size: 0.68rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; color: var(--muted); text-align: center; white-space: nowrap; }
+.dom-badge span { display: block; font-size: 1.05rem; font-weight: 700; color: var(--text); line-height: 1.1; }
+.dom-badge.warn span { color: var(--amber); }
+.dom-badge.alert span { color: var(--red); }
+.sbadge { display: inline-block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; padding: 2px 6px; border-radius: 7px; margin-right: 4px; }
+.sb-active { background: rgba(5,150,105,.12); color: #065f46; }
+.sb-cond   { background: rgba(217,119,6,.12); color: #92400e; }
+.sb-sold   { background: rgba(109,40,217,.12); color: #5b21b6; }
+
+/* ── CALENDAR ── */
+.cal-row { padding: 10px 14px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 50px 1fr; gap: 11px; align-items: center; }
+.cal-row:last-child { border-bottom: none; }
+.cal-row:hover { background: var(--surface2); }
+.cal-date-block { text-align: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px; }
+.cal-date-block .mon { font-size: 0.58rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; }
+.cal-date-block .day { font-size: 1.15rem; font-weight: 700; color: var(--text); line-height: 1; }
+.cal-date-block .dow { font-size: 0.58rem; color: var(--muted); }
+.cal-date-block.today-block { border-color: var(--accent); }
+.cal-date-block.today-block .day { color: var(--accent); }
+.cal-title { font-size: 0.83rem; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+.cal-sub { font-size: 0.72rem; color: var(--muted); }
+
+/* ── LEAD TIMER ── */
+.lead-row { padding: 10px 14px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start; }
+.lead-row:last-child { border-bottom: none; }
+.lead-row:hover { background: var(--surface2); }
+.lead-name { font-size: 0.85rem; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.lead-source { font-size: 0.72rem; color: var(--muted); margin-bottom: 5px; }
+.lead-timer { font-size: 1.2rem; font-weight: 700; text-align: right; line-height: 1; }
+.lead-timer.hot { color: var(--red); }
+.lead-timer.warm { color: var(--amber); }
+.lead-timer.cool { color: var(--green); }
+.lead-stage { font-size: 0.65rem; color: var(--muted); text-align: right; margin-bottom: 5px; }
+.lead-actions { display: flex; gap: 4px; flex-direction: row; justify-content: flex-end; }
+.lead-act-btn { font-size: 0.65rem; padding: 2px 7px; border-radius: 6px; text-decoration: none; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
+.lab-call  { background: rgba(5,150,105,.1);  color: #065f46; border: 1px solid rgba(5,150,105,.3); }
+.lab-email { background: rgba(59,130,246,.1); color: #1d4ed8; border: 1px solid rgba(59,130,246,.3); }
+
+/* ── SHOWING FEEDBACK ── */
+.feedback-row { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.feedback-row:last-child { border-bottom: none; }
+.feedback-row:hover { background: var(--surface2); }
+.feedback-address { font-size: 0.83rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.feedback-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.fpill { font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; border: 1px solid; }
+.fpill.pending  { background: rgba(217,119,6,.1);  border-color: rgba(217,119,6,.35);  color: #92400e; }
+.fpill.received { background: rgba(5,150,105,.1);  border-color: rgba(5,150,105,.35);  color: #065f46; }
+.feedback-summary { font-size: 0.72rem; color: var(--muted); margin-top: 5px; font-style: italic; }
+
+/* ── PRICE REDUCTION WATCH ── */
+.pr-row { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.pr-row:last-child { border-bottom: none; }
+.pr-row:hover { background: var(--surface2); }
+.pr-flag { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; padding: 3px 7px; border-radius: 7px; white-space: nowrap; flex-shrink: 0; }
+.pr-flag.f60 { background: rgba(220,38,38,.12);  color: #991b1b; }
+.pr-flag.f45 { background: rgba(217,119,6,.12);  color: #92400e; }
+.pr-flag.f30 { background: rgba(109,40,217,.12); color: #5b21b6; }
+.pr-address { font-size: 0.83rem; color: var(--text); flex: 1; }
+.pr-dom { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+
+/* ── PROSPECTS ── */
+.prospect-row { padding: 10px 14px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start; }
+.prospect-row:last-child { border-bottom: none; }
+.prospect-row:hover { background: var(--surface2); }
+.prospect-name { font-size: 0.85rem; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.prospect-meta { font-size: 0.72rem; color: var(--muted); }
+.prospect-action { font-size: 0.78rem; color: var(--amber); text-align: right; }
+.prospect-when { font-size: 0.68rem; color: var(--muted); text-align: right; margin-top: 2px; }
+.udot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.utoday { background: var(--red); } .usoon { background: var(--amber); } .uup { background: var(--green); }
+
+/* ── TODO ── */
+.todo-row { padding: 9px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 9px; transition: background .1s; }
+.todo-row:last-child { border-bottom: none; }
+.todo-row:hover { background: var(--surface2); }
+.drag-handle { font-size: .85rem; color: var(--label); cursor: grab; flex-shrink: 0; margin-top: 1px; user-select: none; touch-action: none; }
+.drag-handle:active { cursor: grabbing; }
+.todo-cb { width: 15px; height: 15px; border: 1.5px solid var(--border); border-radius: 4px; margin-top: 2px; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+.todo-cb:hover { border-color: var(--accent); }
+.todo-cb.done { background: var(--brand-blue); border-color: var(--brand-blue); }
+.todo-cb.done::after { content: '✓'; font-size: 0.6rem; color: white; }
+.todo-txt { font-size: 0.83rem; color: var(--text); flex: 1; }
+.todo-txt.done { text-decoration: line-through; color: var(--muted); }
+.ttag { font-size: 0.65rem; padding: 1px 6px; border-radius: 7px; white-space: nowrap; margin-top: 2px; }
+.ttag.listing  { background: rgba(5,150,105,.1);  color: #065f46; }
+.ttag.prospect { background: rgba(59,130,246,.1); color: #1d4ed8; }
+.ttag.admin    { background: rgba(120,113,108,.15); color: #57534e; }
+.ttag.urgent   { background: rgba(220,38,38,.1);  color: #991b1b; }
+
+/* ── VOLUME TRACKER ── */
+.volume-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+.vol-section { padding: 14px 16px; border-right: 1px solid var(--border); }
+.vol-section:last-child { border-right: none; }
+.vol-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px; }
+.vol-numbers { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+.vol-current { font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1; }
+.vol-goal { font-size: 0.85rem; color: var(--muted); }
+.vol-pace { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+.vol-pace .on-pace { color: var(--green); font-weight: 600; }
+.vol-pace .behind { color: var(--amber); font-weight: 600; }
+.progress-bar { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.progress-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .5s; }
+.progress-fill.g { background: var(--green); }
+.progress-fill.a { background: var(--amber); }
+
+/* ── QUICK COMPOSE ── */
+.compose-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+.compose-btn {
+  padding: 12px 14px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background .15s; display: flex; align-items: flex-start; gap: 10px;
+  background: transparent; text-align: left;
+}
+.compose-btn:nth-child(4n) { border-right: none; }
+.compose-btn:nth-last-child(-n+4) { border-bottom: none; }
+.compose-btn:hover { background: var(--surface2); }
+.compose-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+.compose-label { font-size: 0.83rem; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.compose-sub { font-size: 0.7rem; color: var(--muted); }
+
+/* ── REPORTS ── */
+.report-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+.report-card { padding: 14px; border-right: 1px solid var(--border); }
+.report-card:last-child { border-right: none; }
+.report-card:hover { background: var(--surface2); }
+.report-label { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.task-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.68rem; padding: 2px 8px; border-radius: 8px; margin-bottom: 5px; }
+.task-pill.on  { background: rgba(5,150,105,.1);  color: #065f46; }
+.task-pill.off { background: rgba(220,38,38,.1);  color: #991b1b; }
+.task-pill::before { content: '●'; font-size: 0.45rem; }
+.report-sched { font-size: 0.72rem; color: var(--muted); margin-bottom: 8px; }
+.report-meta { font-size: 0.68rem; color: var(--muted); margin-bottom: 8px; }
+.rlinks { display: flex; flex-direction: column; gap: 5px; }
+.rlink { font-size: 0.78rem; text-decoration: none; padding: 5px 9px; border-radius: 6px; display: flex; align-items: center; gap: 6px; transition: background .15s, border-color .15s; cursor: pointer; border: 1px solid; }
+.rlink.b { color: #0d9488; background: rgba(13,148,136,.08); border-color: rgba(13,148,136,.25); }
+.rlink.b:hover { background: rgba(13,148,136,.16); border-color: rgba(13,148,136,.4); }
+.rlink.g { color: var(--green); background: rgba(5,150,105,.08); border-color: rgba(5,150,105,.25); }
+.rlink.g:hover { background: rgba(16,185,129,.18); border-color: rgba(16,185,129,.4); }
+.rlink.a { color: var(--amber); background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.2); }
+.rlink.a:hover { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.4); }
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: white; padding: 10px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; z-index: 999; opacity: 0; transform: translateY(10px); transition: all .25s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- MARKET PULSE -->
+<div class="pulse-banner" id="pulseBanner">
+  <div class="pulse-item"><div class="pulse-label">BoC Rate</div><div class="pulse-value" id="pBoc">—</div><div class="pulse-change" id="pBocSub"></div></div>
+  <div class="pulse-item"><div class="pulse-label">Prime Rate</div><div class="pulse-value" id="pPrime">—</div></div>
+  <div class="pulse-item"><div class="pulse-label">Best Fixed 5yr</div><div class="pulse-value" id="pFixed">—</div></div>
+  <div class="pulse-item"><div class="pulse-label">Best Variable</div><div class="pulse-value" id="pVar">—</div></div>
+  <div class="pulse-item"><div class="pulse-label">FV Benchmark</div><div class="pulse-value" id="pBench">—</div><div class="pulse-change" id="pBenchChg"></div></div>
+  <div class="pulse-item"><div class="pulse-label">FV Detached</div><div class="pulse-value" id="pDet">—</div><div class="pulse-change" id="pDetChg"></div></div>
+  <div class="pulse-item"><div class="pulse-label">FV Active Listings</div><div class="pulse-value" id="pInv">—</div><div class="pulse-change" id="pInvChg"></div></div>
+  <div class="pulse-item"><div class="pulse-label">Avg DOM · Det/TH/Condo</div><div class="pulse-value" id="pDom">—</div></div>
+  <div class="pulse-item"><div class="pulse-label">National Avg</div><div class="pulse-value" id="pNat">—</div><div class="pulse-change" id="pNatChg"></div></div>
+  <div class="pulse-src" id="pSrc"></div>
+</div>
+
+<!-- TOP BAR -->
+<div style="background:var(--brand-coral);height:3px;width:100%;position:sticky;top:0;z-index:101"></div>
+<div class="topbar">
+  <div class="topbar-logo">
+    <!-- Momentum wordmark — white version via currentColor filter -->
+    <svg viewBox="0 0 448 101" xmlns="http://www.w3.org/2000/svg" style="height:30px;width:auto;filter:brightness(0) invert(1)">
+      <path d="m121.76 89-4.192-11.392h-.768l-4.192 11.392h.928l.992-2.768h5.312l.992 2.768zm-2.192-3.536h-4.768l2.384-6.704z" fill="#002d72"/>
+      <path d="m136.15 89v-11.392h-.864v9.872l-6.576-9.872h-.864v11.392h.864v-9.904l6.576 9.904z" fill="#002d72"/>
+      <path d="m145.18 85.32v-.368q0-1.776-.816-2.768t-2.272-.992-2.272 1.04-.816 2.912q0 1.936.832 2.944.848 1.008 2.448 1.008.48 0 .864-.08.384-.064.704-.208.336-.16.624-.384.304-.224.592-.512l-.608-.48q-.496.496-.976.72-.464.208-1.152.208-1.232 0-1.872-.784t-.64-2.256zm-.816-.656h-4.544q.016-.272.032-.464.016-.208.048-.352.032-.16.064-.304.048-.16.128-.336.256-.608.784-.944.544-.352 1.216-.352t1.2.352q.544.336.8.944.064.176.112.336.048.144.08.304.032.144.048.352.016.192.032.464z" fill="#002d72"/>
+      <path d="m157.37 81.288h-.896l-1.968 6.752-2.208-6.752h-.8l-2.208 6.752-1.968-6.752h-.896l2.464 7.712h.832l2.176-6.432 2.176 6.432h.832z" fill="#002d72"/>
+      <path d="m173.04 89v-11.392h-.864l-3.872 8.784-3.968-8.784h-.864v11.392h.864v-9.392l3.52 7.792h.864l3.456-7.792v9.392z" fill="#002d72"/>
+      <path d="m182.11 85.144q0-.832-.176-1.664t-.784-1.44q-.416-.416-.96-.624-.528-.224-1.184-.224-1.296 0-2.144.848-.608.608-.784 1.44t-.176 1.664.176 1.664.784 1.44q.848.848 2.144.848.656 0 1.184-.208.544-.224.96-.64.608-.608.784-1.44t.176-1.664zm-.816 0q0 .336-.016.688t-.096.704q-.064.336-.208.64-.128.304-.368.544-.32.32-.736.496-.4.16-.864.16-.944 0-1.6-.656-.24-.24-.384-.544-.128-.304-.208-.64-.064-.352-.08-.704t-.016-.688.016-.688.08-.688q.08-.352.208-.656.144-.304.384-.544.656-.656 1.6-.656.464 0 .864.176.416.16.736.48.24.24.368.544.144.304.208.656.08.336.096.688t.016.688z" fill="#002d72"/>
+      <path d="m189.69 81.288h-.896l-2.32 6.752-2.32-6.752h-.896l2.816 7.712h.8z" fill="#002d72"/>
+      <path d="m197.03 85.32v-.368q0-1.776-.816-2.768t-2.272-.992-2.272 1.04-.816 2.912q0 1.936.832 2.944.848 1.008 2.448 1.008.48 0 .864-.08.384-.064.704-.208.336-.16.624-.384.304-.224.592-.512l-.608-.48q-.496.496-.976.72-.464.208-1.152.208-1.232 0-1.872-.784t-.64-2.256zm-.816-.656h-4.544q.016-.272.032-.464.016-.208.048-.352.032-.16.064-.304.048-.16.128-.336.256-.608.784-.944.544-.352 1.216-.352t1.2.352q.544.336.8.944.064.176.112.336.048.144.08.304.032.144.048.352.016.192.032.464z" fill="#002d72"/>
+      <path d="m210.71 89v-4.928q0-1.376-.8-2.144-.368-.352-.88-.544t-1.152-.192q-.864 0-1.536.368-.656.352-1.088 1.04-.352-.688-.992-1.04-.624-.368-1.488-.368-1.424 0-2.288 1.008v-.912h-.816v7.712h.816v-4.784q0-1.104.56-1.696.576-.608 1.616-.608t1.584.592.544 1.712v4.784h.816v-4.928q0-.992.576-1.568.592-.592 1.6-.592 1.04 0 1.584.592t.544 1.712v4.784z" fill="#002d72"/>
+      <path d="m219.46 85.32v-.368q0-1.776-.816-2.768t-2.272-.992-2.272 1.04-.816 2.912q0 1.936.832 2.944.848 1.008 2.448 1.008.48 0 .864-.08.384-.064.704-.208.336-.16.624-.384.304-.224.592-.512l-.608-.48q-.496.496-.976.72-.464.208-1.152.208-1.232 0-1.872-.784t-.64-2.256zm-.816-.656h-4.544q.016-.272.032-.464.016-.208.048-.352.032-.16.064-.304.048-.16.128-.336.256-.608.784-.944.544-.352 1.216-.352t1.2.352q.544.336.8.944.064.176.112.336.048.144.08.304.032.144.048.352.016.192.032.464z" fill="#002d72"/>
+      <path d="m228.04 89v-4.928q0-1.376-.8-2.144-.768-.736-2.048-.736-1.408 0-2.272 1.008v-.912h-.816v7.712h.816v-4.784q0-1.104.56-1.696.576-.608 1.616-.608t1.584.592.544 1.712v4.784z" fill="#002d72"/>
+      <path d="m233.79 89v-.72h-.56q-.608 0-.896-.336t-.288-.944v-5.104h1.744v-.608h-1.744v-2.464h-.816v2.464h-1.056v.608h1.056v5.088q0 .88.464 1.456.48.56 1.392.56z" fill="#002d72"/>
+      <path d="m241.23 78.616v-1.008h-1.008v1.008zm-.096 10.384v-7.712h-.816v7.712z" fill="#002d72"/>
+      <path d="m250.16 89v-4.928q0-1.376-.8-2.144-.768-.736-2.048-.736-1.408 0-2.272 1.008v-.912h-.816v7.712h.816v-4.784q0-1.104.56-1.696.576-.608 1.616-.608t1.584.592.544 1.712v4.784z" fill="#002d72"/>
+      <path d="m265.2 89-2.752-5.264q1.2-.208 1.904-.992.72-.8.72-2.08 0-.736-.256-1.312-.24-.576-.688-.96-.432-.384-1.04-.576-.592-.208-1.28-.208h-4.336v11.392h.864v-5.248h3.136l2.72 5.248zm-.992-8.32q0 .592-.192 1.024-.176.432-.512.72t-.8.432q-.464.128-1.008.128h-3.36v-4.608h3.36q.544 0 1.008.144.464.128.8.416t.512.72q.192.432.192 1.024z" fill="#002d72"/>
+      <path d="m273.49 85.32v-.368q0-1.776-.816-2.768t-2.272-.992-2.272 1.04-.816 2.912q0 1.936.832 2.944.848 1.008 2.448 1.008.48 0 .864-.08.384-.064.704-.208.336-.16.624-.384.304-.224.592-.512l-.608-.48q-.496.496-.976.72-.464.208-1.152.208-1.232 0-1.872-.784t-.64-2.256zm-.816-.656h-4.544q.016-.272.032-.464.016-.208.048-.352.032-.16.064-.304.048-.16.128-.336.256-.608.784-.944.544-.352 1.216-.352t1.2.352q.544.336.8.944.064.176.112.336.048.144.08.304.032.144.048.352.016.192.032.464z" fill="#002d72"/>
+      <path d="m281.48 89v-5.28q0-1.216-.736-1.872-.72-.656-2.256-.656-.944 0-1.584.256-.64.24-1.136.928l.592.512q.368-.528.832-.752.48-.224 1.296-.224 1.184 0 1.68.48t.496 1.408v.864h-2.496q-1.264 0-1.984.592-.704.576-.704 1.632 0 .432.144.832t.416.672q.368.384.88.544.528.16 1.392.16.816 0 1.328-.176.528-.192 1.024-.688v.768zm-.816-2.688q0 1.072-.432 1.472-.416.4-.912.496-.48.096-1.008.096-1.056 0-1.536-.368t-.48-1.136q0-1.552 1.968-1.552h2.4z" fill="#002d72"/>
+      <path d="m287.04 89v-.72h-.56q-.688 0-.944-.32-.24-.32-.24-.976v-9.376h-.816v9.392q0 .912.448 1.456.464.544 1.408.544z" fill="#002d72"/>
+      <path d="m300.32 89v-.768h-6.048v-4.592h5.152v-.768h-5.152v-4.496h6.048v-.768h-6.912v11.392z" fill="#002d72"/>
+      <path d="m308.22 86.808q0-.56-.176-.928t-.48-.592q-.288-.24-.704-.336-.416-.112-.896-.16l-1.248-.112q-.816-.08-1.2-.384-.368-.304-.368-.912 0-.72.496-1.104.512-.384 1.472-.384 1.264 0 2.16.656l.544-.544q-.512-.384-1.216-.592-.688-.224-1.488-.224-1.264 0-2.016.592t-.752 1.6q0 1.824 2.32 2.016l1.28.112q.768.08 1.12.384t.352.912q0 .784-.592 1.184-.592.384-1.728.384-1.632 0-2.528-.944l-.56.56q.592.56 1.344.832.768.272 1.776.272 1.424 0 2.256-.608.832-.624.832-1.68z" fill="#002d72"/>
+      <path d="m313.24 89v-.72h-.56q-.608 0-.896-.336t-.288-.944v-5.104h1.744v-.608h-1.744v-2.464h-.816v2.464h-1.056v.608h1.056v5.088q0 .88.464 1.456.48.56 1.392.56z" fill="#002d72"/>
+      <path d="m320.87 89v-5.28q0-1.216-.736-1.872-.72-.656-2.256-.656-.944 0-1.584.256-.64.24-1.136.928l.592.512q.368-.528.832-.752.48-.224 1.296-.224 1.184 0 1.68.48t.496 1.408v.864h-2.496q-1.264 0-1.984.592-.704.576-.704 1.632 0 .432.144.832t.416.672q.368.384.88.544.528.16 1.392.16.816 0 1.328-.176.528-.192 1.024-.688v.768zm-.816-2.688q0 1.072-.432 1.472-.416.4-.912.496-.48.096-1.008.096-1.056 0-1.536-.368t-.48-1.136q0-1.552 1.968-1.552h2.4z" fill="#002d72"/>
+      <path d="m326.64 89v-.72h-.56q-.608 0-.896-.336t-.288-.944v-5.104h1.744v-.608h-1.744v-2.464h-.816v2.464h-1.056v.608h1.056v5.088q0 .88.464 1.456.48.56 1.392.56z" fill="#002d72"/>
+      <path d="m334.63 85.32v-.368q0-1.776-.816-2.768t-2.272-.992-2.272 1.04-.816 2.912q0 1.936.832 2.944.848 1.008 2.448 1.008.48 0 .864-.08.384-.064.704-.208.336-.16.624-.384.304-.224.592-.512l-.608-.48q-.496.496-.976.72-.464.208-1.152.208-1.232 0-1.872-.784t-.64-2.256zm-.816-.656h-4.544q.016-.272.032-.464.016-.208.048-.352.032-.16.064-.304.048-.16.128-.336.256-.608.784-.944.544-.352 1.216-.352t1.2.352q.544.336.8.944.064.176.112.336.048.144.08.304.032.144.048.352.016.192.032.464z" fill="#002d72"/>
+      <path d="m120 35.918c0 12.814-9.5971 23.082-21.716 23.082-11.712 0-22.284-9.5291-22.284-23.082 0-12.732 9.5156-22.918 21.715-22.918 11.712 0 22.285 9.4459 22.285 22.918m-34.729-2.8746c0 8.1316 3.7417 22.753 13.99 22.753 7.6447 0 11.386-6.5713 11.386-16.922 0-8.0502-3.5787-22.671-13.745-22.671-7.8077 0-11.631 6.489-11.631 16.839" fill="#002d72"/>
+      <path d="m192.36 46.153v-17.521c0-10.86-5.5621-15.632-12.701-15.632-6.0594 0-10.957 4.1951-14.278 8.7208-1.8263-6.0059-6.1282-8.7208-11.441-8.7208-4.7992 0-7.7917 2.4809-10.463 5.1807l-.4767 2.4534c1.8218-1.1071 4.2026-1.8844 6.4564-1.8844 5.6452 0 8.1209 3.9576 8.1209 11.608v15.796c0 8.4735-.0832 9.6249-6.392 10.366v1.4811h21.832v-1.4811c-6.5566-.74099-6.6398-1.8924-6.6398-10.366v-17.521c0-1.8924-.16635-3.6207-.49817-5.1009 2.2413-2.9622 6.0594-4.7863 9.297-4.7863 5.6452 0 8.3847 3.9629 8.3847 11.613v15.796c0 8.4735-.0832 9.6249-6.4752 10.366v1.4811h21.915v-1.4811c-6.5584-.74099-6.6407-1.8924-6.6407-10.366" fill="#002d72"/>
+      <path d="m140.5 46.153v-25.584l-.167-7.5685-15.333 5.1009v1.4802c6.5004.08243 6.6665.08243 6.6665 8.0622v18.51c0 8.4735-.0826 9.6249-6.6665 10.366v1.4811h22v-1.4811c-6.416-.74099-6.4995-1.8924-6.4995-10.366" fill="#002d72"/>
+      <path d="m258.5 46.153v-25.584l-.167-7.5685-15.333 5.1009v1.4802c6.5002.08243 6.6663.08243 6.6663 8.0622v18.51c0 8.4735-.0826 9.6249-6.6663 10.366v1.4811h22v-1.4811c-6.4167-.74099-6.5002-1.8924-6.5002-10.366" fill="#002d72"/>
+      <path d="m67.359 46.153v-17.521c0-10.86-5.5621-15.632-12.701-15.632-6.0593 0-10.957 4.1951-14.278 8.7208-1.8263-6.0059-6.1282-8.7208-11.441-8.7208-4.7992 0-7.7908 2.4809-10.461 5.1807l-.47849 2.4534c1.8218-1.1071 4.2026-1.8844 6.4564-1.8844 5.6453 0 8.1209 3.9576 8.1209 11.608v15.796c0 8.4735-.08228 9.6249-6.3921 10.366v1.4811h21.832v-1.4811c-6.5575-.74099-6.6407-1.8924-6.6407-10.366v-17.521c0-1.8924-.16635-3.6207-.49816-5.1009 2.2413-2.9622 6.0602-4.7863 9.297-4.7863 5.6453 0 8.3847 3.9629 8.3847 11.613v15.796c0 8.4735-.08318 9.6249-6.4752 10.366v1.4811h21.915v-1.4811c-6.5575-.74099-6.6407-1.8924-6.6407-10.366" fill="#002d72"/>
+      <path d="m15.5 46.153v-25.584l-.167-7.5685-15.333 5.1009v1.4802c6.5004.08243 6.6665.08243 6.6665 8.0622v18.51c0 8.4735-.082602 9.6249-6.6665 10.366v1.4811h22v-1.4811c-6.416-.74099-6.4995-1.8924-6.4995-10.366" fill="#002d72"/>
+      <path d="m441.36 46.153v-17.521c0-10.86-5.5621-15.632-12.701-15.632-6.0593 0-10.957 4.1951-14.278 8.7208-1.8263-6.0059-6.1282-8.7208-11.441-8.7208-4.7992 0-7.7917 2.4809-10.463 5.1807l-.4767 2.4534c1.8218-1.1071 4.2026-1.8844 6.4564-1.8844 5.6452 0 8.1209 3.9576 8.1209 11.608v15.796c0 8.4735-.0823 9.6249-6.392 10.366v1.4811h21.832v-1.4811c-6.5566-.74099-6.6398-1.8924-6.6398-10.366v-17.521c0-1.8924-.16635-3.6207-.49817-5.1009 2.2413-2.9622 6.0594-4.7863 9.297-4.7863 5.6452 0 8.3847 3.9629 8.3847 11.613v15.796c0 8.4735-.0832 9.6249-6.4752 10.366v1.4811h21.915v-1.4811c-6.5584-.74099-6.6407-1.8924-6.6407-10.366" fill="#002d72"/>
+      <path d="m390.5 46.153v-25.584l-.167-7.5685-15.333 5.1009v1.4802c6.5004.08243 6.6665.08243 6.6665 8.0622v18.51c0 8.4735-.0835 9.6249-6.6665 10.366v1.4811h22v-1.4811c-6.4169-.74099-6.4995-1.8924-6.4995-10.366" fill="#002d72"/>
+      <path d="m238.01 46.35c-2.7144 2.6286-6.9912 5.3395-13.242 5.3395-4.9955 0-9.531-2.2737-12.323-6.4396-3.3259-4.9633-4.111-11.61-3.4783-17.429.58401-5.3704 3.3542-10.857 9.2102-11.675.52197-.07346 1.0475-.10798 1.5739-.10798 5.84 0 8.8017 5.3403 8.5544 11.583h-16.263l-.7639 3.2038h26.978c-.73997-11.993-8.0599-17.825-16.943-17.825-11.186 0-20.317 10.432-20.317 23.329 0 12.896 6.416 22.671 19.741 22.671 9.212 0 15.051-6.1608 18.259-11.828z" fill="#002d72"/>
+      <path d="m283.35 46.153v-17.521c0-10.86-5.2692-15.632-12.498-15.632-4.7598 0-7.6334 2.3887-10.346 5.1036l-.50937 2.4578c1.8477-1.1239 4.0177-1.817 6.2369-1.817 5.7329 0 8.3084 3.9629 8.3084 11.613v15.796c0 8.4735-.0824 9.6249-6.4804 10.366v1.4811h21.935v-1.4811c-6.5636-.74099-6.6469-1.8924-6.6469-10.366" fill="#002d72"/>
+      <path d="M 299.22941,46.192029 V 16.774471 H 292 v -3.305713 h 7.31267 V 6.0320149 L 308.0381,-7.1224641e-4 V 13.468758 h 10.80158 v 3.305713 H 308.0381 v 27.847945 c 0,6.279342 1.16297,8.75885 5.73249,8.75885 2.07795,0 4.40479-.661499 6.48185-2.562306 L 321,51.563257 C 318.67405,55.282074 315.5155,59 309.61648,59 303.05227,59 299.22941,55.528689 299.22941,46.192029" fill="#002d72"/>
+      <path d="m365.33 44.357v-30.357h-15.333v1.4811c6.4169.74099 6.5004 1.8924 6.5004 10.366v23.363c-.004.0053-.009.0089-.0126.01329v2.2221c.004-.0044.007-.0089.0126-.01418l.0835 7.5685 15.416-5.1009v-1.4802c-6.583-.08243-6.6665-.08243-6.6665-8.0622" fill="#002d72"/>
+      <path d="m347.76 53.255c-5.7329 0-8.3084-3.9628-8.3084-11.613v-27.642h-15.455v1.4811c6.5645.74097 6.6469 1.8923 6.6469 10.366v17.523c0 10.858 5.2692 15.63 12.499 15.63 4.7589 0 7.6334-2.3887 10.345-5.1044l.50937-2.4578c-1.8477 1.1248-4.0177 1.817-6.2369 1.817" fill="#002d72"/>
+    </svg>
+    <div class="topbar-divider"></div>
+    <div class="topbar-subtitle">Aaron Muller · Realtor Dashboard</div>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-date" id="topbarDate"></div>
+    <span class="last-upd" id="lastUpd"></span>
+    <button class="refresh-btn" onclick="location.reload()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- STATS BAR -->
+  <div class="stats-bar card-full">
+    <div class="stat-item"><div class="stat-value" id="stListings">—</div><div class="stat-label">Active Listings</div></div>
+    <div class="stat-item"><div class="stat-value" id="stProspects">—</div><div class="stat-label">Prospects</div></div>
+    <div class="stat-item"><div class="stat-value" id="stDatesWeek">—</div><div class="stat-label">Dates This Week</div></div>
+    <div class="stat-item"><div class="stat-value" id="stLeads">—</div><div class="stat-label">New Leads (24h)</div></div>
+    <div class="stat-item"><div class="stat-value" id="stOverdue">—</div><div class="stat-label">Active Follow-Ups</div></div>
+    <div class="stat-item"><div class="stat-value" id="stDeals">—</div><div class="stat-label">Deals YTD</div></div>
+  </div>
+
+  <!-- THIS WEEK'S ACTIONS -->
+  <div class="card">
+    <div class="card-header" style="border-left-color:var(--amber)">
+      <div class="card-title"><span class="dot a"></span>This Week's Actions</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <span class="card-count" id="cntTodo">0</span>
+        <button onclick="openAddTask()" style="width:24px;height:24px;border-radius:50%;background:var(--brand-coral);color:#fff;border:none;font-size:1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">+</button>
+      </div>
+    </div>
+    <div class="card-body card-scroll" id="bodyTodo"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- ADD TASK MODAL -->
+  <div id="addTaskOverlay" onclick="closeAddTask()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:360px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-weight:700;font-size:.95rem;color:var(--brand-blue);margin-bottom:16px">Add Task</div>
+      <input id="atText" type="text" placeholder="What needs to be done?" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;color:var(--text);outline:none;margin-bottom:10px" onkeydown="if(event.key==='Enter')saveAddTask()">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <select id="atCat" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--text)">
+          <option value="admin">Admin</option>
+          <option value="listing">Listing</option>
+          <option value="prospect">Prospect</option>
+          <option value="urgent">Urgent</option>
+        </select>
+        <input id="atDue" type="date" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--text)">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted);margin-bottom:16px;cursor:pointer">
+        <input id="atUrgent" type="checkbox" style="width:15px;height:15px;accent-color:var(--brand-coral)"> Mark as high priority ⚡
+      </label>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="closeAddTask()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
+        <button onclick="saveAddTask()" style="padding:8px 18px;border:none;border-radius:8px;background:var(--brand-blue);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Add Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROSPECTS (wide) -->
+  <div class="card card-wide">
+    <div class="card-header">
+      <div class="card-title"><span class="dot p"></span>Prospects & Follow-Ups</div>
+      <span class="card-count" id="cntProspects">0</span>
+    </div>
+    <div class="card-body card-scroll" id="bodyProspects"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- PROSPECT EDIT MODAL -->
+  <div id="prospectOverlay" onclick="closeProspectModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:460px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-weight:700;font-size:.95rem;color:var(--accent);margin-bottom:4px">✏️ Update Prospect</div>
+      <div id="peModalName" style="font-size:.8rem;color:var(--muted);margin-bottom:18px"></div>
+      <input type="hidden" id="peId">
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">NEXT ACTION</label>
+          <input id="peAction" type="text" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">FOLLOW-UP DATE</label>
+            <input id="peDate" type="date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          </div>
+          <div>
+            <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">STATUS</label>
+            <select id="peStatus" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box;background:#fff">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">NOTES</label>
+          <textarea id="peNotes" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.82rem;box-sizing:border-box;resize:vertical;font-family:inherit"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="closeProspectModal()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
+        <button onclick="saveProspect()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE LISTINGS (wide) -->
+  <div class="card card-wide">
+    <div class="card-header">
+      <div class="card-title"><span class="dot g"></span>Active Listings</div>
+      <span class="card-count" id="cntListings">0</span>
+    </div>
+    <div class="card-body card-scroll" id="bodyListings"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot"></span>Upcoming Events</div>
+      <span class="card-count" id="cntCal">0</span>
+    </div>
+    <div class="card-body card-scroll" id="bodyCal"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- LEAD RESPONSE TIMER -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot r"></span>Lead Response Timer</div>
+      <span class="card-count" id="cntLeads">0</span>
+    </div>
+    <div class="card-body card-scroll" id="bodyLeads"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- LEAD AGING QUEUE -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot r" style="background:#B45309"></span>Lead Aging Queue</div>
+      <span class="card-count" id="cntAging">0</span>
+    </div>
+    <div class="card-body card-scroll" id="bodyAging"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- CRITICAL DATES -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot g"></span>Critical Dates</div>
+      <span class="card-count" id="cntDates">0</span>
+    </div>
+    <div class="card-body card-scroll" id="bodyDates"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- VOLUME TRACKER (full) -->
+  <div class="card card-full">
+    <div class="card-header">
+      <div class="card-title"><span class="dot t"></span>2026 Volume Tracker</div>
+    </div>
+    <div class="volume-grid" id="bodyVolume"></div>
+  </div>
+
+  <!-- ── SALES TRACKER ── -->
+  <div class="card card-full">
+    <div class="card-header" style="border-left-color:var(--green)">
+      <div class="card-title"><span class="dot g"></span>2026 Sales Tracker</div>
+    </div>
+    <div id="bodySales"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- ── COMPETITOR INTEL ── -->
+  <div class="card card-full" id="panelCompetitors">
+    <div class="card-header" style="border-left-color:#E05A2B">
+      <div class="card-title"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E05A2B;margin-right:6px"></span>Competitor Intel — South Surrey / White Rock</div>
+      <button onclick="checkAllAds()" style="margin-left:auto;padding:4px 12px;font-size:.72rem;background:#E05A2B;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;letter-spacing:.03em">⚡ Check Ads Live</button>
+    </div>
+    <div id="bodyCompetitors" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:12px"><div class="empty">Loading…</div></div>
+    <div id="adsStatus" style="padding:6px 14px 10px;font-size:.7rem;color:var(--muted);display:none"></div>
+  </div>
+
+  <!-- ── INTEGRITY TRACKER ── -->
+  <div class="card card-full">
+    <div class="card-header" style="border-left-color:var(--purple)">
+      <div class="card-title"><span class="dot p"></span>Integrity Tracker — Weekly Activity Log</div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <button onclick="clearIntegrityOverrides()" id="btnClearOverrides" style="display:none;padding:4px 10px;font-size:.7rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;cursor:pointer">✕ Clear Overrides</button>
+        <button onclick="openIntegrityModal()" style="padding:4px 12px;font-size:.72rem;background:var(--purple);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">✏️ Update Numbers</button>
+      </div>
+    </div>
+    <div id="bodyIntegrity"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- INTEGRITY UPDATE MODAL -->
+  <div id="integrityOverlay" onclick="closeIntegrityModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:480px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3);margin-bottom:40px">
+      <div style="font-weight:700;font-size:.95rem;color:var(--purple);margin-bottom:4px">✏️ Update This Week's Numbers</div>
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:18px">Enter your counts for the current week. Leave blank to keep existing values.</div>
+
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--purple);margin-bottom:8px">Appointments</div>
+      <div id="intApptFields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px"></div>
+
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:8px">Activities</div>
+      <div id="intActFields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="closeIntegrityModal()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
+        <button onclick="saveIntegrityNumbers()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--purple);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPORTS (full) -->
+  <div class="card card-full">
+    <div class="card-header">
+      <div class="card-title"><span class="dot"></span>Scheduled Reports</div>
+    </div>
+    <div class="report-grid" id="bodyReports"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- QUICK COMPOSE (full) -->
+  <div class="card card-full">
+    <div class="card-header">
+      <div class="card-title"><span class="dot g"></span>Quick Compose</div>
+      <span style="font-size:0.68rem;color:var(--muted)">Click → copies prompt to clipboard → paste into Claude</span>
+    </div>
+    <div class="compose-grid" id="bodyCompose"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── UTILS ──
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const today  = new Date(); today.setHours(0,0,0,0);
+const todayStr = fmtDateStr(today);
+
+function fmtDateStr(d) { return d.toISOString().slice(0,10); }
+function daysUntil(s) {
+  if (!s) return null;
+  const d = new Date(s); if (isNaN(d)) return null;
+  d.setHours(0,0,0,0);
+  return Math.round((d - today) / 86400000);
+}
+function relDate(s) {
+  const n = daysUntil(s);
+  if (n === null) return '';
+  if (n < 0) return `${Math.abs(n)}d overdue`;
+  if (n === 0) return 'Today'; if (n === 1) return 'Tomorrow';
+  return `in ${n}d`;
+}
+function fmtPrice(n) {
+  if (!n) return '—';
+  if (n >= 1000000) return '$' + (n/1000000).toFixed(n%1000000===0?0:2).replace(/\.?0+$/,'') + 'M';
+  return '$' + Math.round(n/1000) + 'K';
+}
+function fmtTime(iso) {
+  const d = new Date(iso); let h = d.getHours(), m = d.getMinutes();
+  const ap = h>=12?'PM':'AM'; h = h%12||12;
+  return `${h}:${String(m).padStart(2,'0')} ${ap}`;
+}
+function minutesAgo(iso) {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+}
+function fmtElapsed(min) {
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min/60), m = min%60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+function urgClass(s) {
+  const n = daysUntil(s); if (n===null) return '';
+  return n<=0 ? 'utoday' : n<=3 ? 'usoon' : 'uup';
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── DATA ──
+// Loads .js data files via dynamic script injection — works with file:// and http://
+// Scheduled tasks write data/*.js files; this dashboard reads them without needing a server.
+let D = { listings:[], prospects:[], calendar:[], leads:[], fubTasks:[], scheduled:[], pulse:{}, goals:{}, closed:[], bizSales:{}, bizIntegrity:{}, weeklyActions:[], competitors:[] };
+
+const DATA_FILES = [
+  { src:'data/listings.js',        global:'DASH_LISTINGS'  },
+  { src:'data/calendar.js',        global:'DASH_CALENDAR'  },
+  { src:'data/scheduled_tasks.js', global:'DASH_TASKS'     },
+  { src:'data/fub_leads.js',       global:'DASH_LEADS'     },
+  { src:'data/fub_tasks.js',       global:'DASH_FUB_TASKS' },
+  { src:'data/market_pulse.js',    global:'DASH_PULSE'     },
+  { src:'data/goals.js',           global:'DASH_GOALS'     },
+  { src:'data/business_plan.js',   global:'DASH_BIZPLAN'   },
+  { src:'data/weekly_actions.js',  global:'DASH_ACTIONS'      },
+  { src:'data/competitors.js',     global:'DASH_COMPETITORS'  },
+];
+
+function loadDataFiles() {
+  return new Promise(resolve => {
+    // Remove old injected scripts
+    document.querySelectorAll('[data-dash]').forEach(el => el.remove());
+    // Clear globals so stale values don't linger if a file fails
+    DATA_FILES.forEach(f => { window[f.global] = undefined; });
+
+    let done = 0;
+    const t = Date.now();
+    DATA_FILES.forEach(f => {
+      const s = document.createElement('script');
+      s.src = f.src + '?t=' + t;
+      s.setAttribute('data-dash', f.global);
+      s.onload = s.onerror = () => { if (++done === DATA_FILES.length) resolve(); };
+      document.head.appendChild(s);
+    });
+  });
+}
+
+async function loadAllData() {
+  await loadDataFiles();
+
+  // On Vercel (not local file://), fetch live lead data directly from FUB API
+  if (location.protocol !== 'file:') {
+    try {
+      const r = await fetch('/api/leads');
+      if (r.ok) window.DASH_LEADS = await r.json();
+    } catch(e) { /* fall back to static data/fub_leads.js */ }
+  }
+
+  const ld    = window.DASH_LISTINGS  || {};
+  const cal   = window.DASH_CALENDAR  || {};
+  const tasks = window.DASH_TASKS     || {};
+  const fub   = window.DASH_LEADS     || {};
+  const fubT  = window.DASH_FUB_TASKS || {};
+  const pulse = window.DASH_PULSE     || {};
+  const goals = window.DASH_GOALS     || {};
+
+  const biz   = window.DASH_BIZPLAN || {};
+
+  D.listings     = ld.listings        || [];
+  D.prospects    = ld.prospects       || [];
+  D.calendar     = cal.events         || [];
+  D.scheduled    = tasks.tasks        || [];
+  D.leads        = fub.leads          || [];
+  D.fubTasks     = fubT.tasks         || [];
+  D.pulse        = pulse;
+  D.goals        = goals.goals        || {};
+  D.closed       = goals.closedDeals  || [];
+  D.bizSales     = biz.sales          || {};
+  D.bizIntegrity = biz.integrity      || {};
+  D.competitors   = (window.DASH_COMPETITORS || {}).competitors || [];
+  D.weeklyActions = (window.DASH_ACTIONS || {}).tasks || [];
+  D.weeklyActionsWeekOf = (window.DASH_ACTIONS || {}).weekOf || '';
+  D.weeklyActionsSource = (window.DASH_ACTIONS || {}).source || 'manual';
+
+  buildPulse(); buildStats(); buildListings(); buildCalendar();
+  buildLeads(); buildAgingQueue(); buildCriticalDates(); initTodoStorage(); buildTodo();
+  buildProspects(); buildVolume(); buildCompose(); buildReports();
+  buildSalesTracker(); buildIntegrityTracker(); buildWeeklyActions(); buildCompetitors();
+  updateClearOverridesBtn();
+
+  document.getElementById('lastUpd').textContent =
+    'Updated ' + new Date().toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ── MARKET PULSE ──
+function buildPulse() {
+  const p = D.pulse; if (!p || !p.bocRate) return;
+  const $ = id => document.getElementById(id);
+  const chg = (v, suffix='%', inverse=false) => {
+    if (v==null) return '';
+    const up = inverse ? v<0 : v>0;
+    const cls = up ? 'up' : v===0 ? 'neutral' : 'dn';
+    return `<span class="${cls}">${v>0?'+':''}${v}${suffix}</span>`;
+  };
+  $('pBoc').textContent    = p.bocRate + '%';
+  $('pBocSub').innerHTML   = '<span class="neutral">5th consecutive hold</span>';
+  $('pPrime').textContent  = p.primeRate + '%';
+  $('pFixed').textContent  = p.bestFixed5yr + '%';
+  $('pVar').textContent    = p.bestVariable + '%';
+  $('pBench').textContent  = fmtPrice(p.fvBenchmark);
+  $('pBenchChg').innerHTML = chg(p.fvBenchmarkChange,'% MoM',true);
+  $('pDet').textContent    = fmtPrice(p.fvDetachedBenchmark);
+  $('pDetChg').innerHTML   = chg(p.fvDetachedYoYChange,'% YoY',true);
+  $('pInv').textContent    = (p.fvActiveListings||'—').toLocaleString();
+  $('pInvChg').innerHTML   = p.fvActiveListingsVsAvg != null ? `<span class="dn">+${p.fvActiveListingsVsAvg}% vs 10yr avg</span>` : '';
+  $('pDom').textContent    = `${p.fvAvgDomDetached}d / ${p.fvAvgDomTownhome}d / ${p.fvAvgDomCondo}d`;
+  $('pNat').textContent    = fmtPrice(p.nationalAvgPrice);
+  $('pNatChg').innerHTML   = chg(p.nationalAvgPriceYoYChange,'% YoY');
+  $('pSrc').textContent    = p.source || '';
+}
+
+// ── STATS ──
+function buildStats() {
+  const active = D.listings.filter(l=>l.status==='Active'||l.status==='Conditional').length;
+  const prospects = D.prospects.filter(p=>p.status==='Active').length;
+  let week=0;
+  D.listings.forEach(l=>{
+    ['offerReviewDate','openHouseDate','completionDate','conditionalDate'].forEach(k=>{
+      const n=daysUntil(l[k]); if(n!=null&&n>=0&&n<=7)week++;
+    });
+  });
+  const recentLeads = D.leads.filter(l=>minutesAgo(l.receivedAt)<1440).length;
+  let activeFollowUps=0;
+  D.prospects.forEach(p=>{const n=daysUntil(p.nextActionDate);if(p.status==='Active'&&n!=null&&n>=0&&n<=30)activeFollowUps++;});
+  const ytd = D.bizSales.ytdDeals != null ? D.bizSales.ytdDeals : D.closed.length;
+
+  document.getElementById('stListings').textContent = active;
+  document.getElementById('stProspects').textContent = prospects;
+  document.getElementById('stDatesWeek').textContent = week;
+  document.getElementById('stLeads').textContent = recentLeads;
+  document.getElementById('stOverdue').textContent = activeFollowUps;
+  document.getElementById('stDeals').textContent = ytd;
+}
+
+// ── LISTINGS ──
+function buildListings() {
+  const el = document.getElementById('bodyListings');
+  document.getElementById('cntListings').textContent = D.listings.length;
+  if (!D.listings.length) { el.innerHTML='<div class="empty">Add listings to data/listings.json</div>'; return; }
+  const sbMap = {Active:'sb-active',Conditional:'sb-cond',Sold:'sb-sold'};
+  el.innerHTML = D.listings.map(l=>{
+    const dom = l.daysOnMarket ?? 0;
+    const domCls = dom>=60?'alert':dom>=30?'warn':'';
+    const dates = [];
+    if(l.photoSessionDate) dates.push(`<span class="date-pill dp-photo">📷 Photos: ${l.photoSessionDate} (${relDate(l.photoSessionDate)})</span>`);
+    if(l.stagingDate)      dates.push(`<span class="date-pill dp-stage">🏠 Staging: ${l.stagingDate} (${relDate(l.stagingDate)})</span>`);
+    if(l.offerReviewDate)  dates.push(`<span class="date-pill dp-offer">📋 Offers: ${l.offerReviewDate} (${relDate(l.offerReviewDate)})</span>`);
+    if(l.openHouseDate)    dates.push(`<span class="date-pill dp-open">🚪 OH: ${l.openHouseDate}${l.openHouseTime?' @ '+l.openHouseTime:''}</span>`);
+    if(l.conditionalDate)  dates.push(`<span class="date-pill dp-cond">⚠️ Conditions: ${l.conditionalDate} (${relDate(l.conditionalDate)})</span>`);
+    if(l.completionDate)   dates.push(`<span class="date-pill dp-comp">🏁 Completion: ${l.completionDate} (${relDate(l.completionDate)})</span>`);
+    return `<div class="listing-row">
+      <div>
+        <div class="listing-address">${l.address}</div>
+        <div class="listing-mls">MLS® ${l.mlsNumber||'TBD'}</div>
+        <span class="sbadge ${sbMap[l.status]||'sb-active'}">${l.status}</span>
+        ${l.listPrice?`<span class="listing-price">${fmtPrice(l.listPrice)}</span>`:''}
+        ${l.notes?`<div style="font-size:.72rem;color:var(--muted);margin-top:4px">${l.notes}</div>`:''}
+        ${dates.length?`<div class="listing-dates">${dates.join('')}</div>`:''}
+      </div>
+      <div class="dom-badge ${domCls}"><span>${dom}</span>DOM</div>
+    </div>`;
+  }).join('');
+}
+
+// ── CALENDAR ──
+function buildCalendar() {
+  const el = document.getElementById('bodyCal');
+  const evts = [...D.calendar].sort((a,b)=>new Date(a.start)-new Date(b.start));
+  document.getElementById('cntCal').textContent = evts.length;
+  if (!evts.length) { el.innerHTML='<div class="empty">No upcoming events</div>'; return; }
+  el.innerHTML = evts.map(e=>{
+    const d = new Date(e.start);
+    const isToday = fmtDateStr(d)===todayStr;
+    const allDay = !e.start.includes('T');
+    return `<div class="cal-row">
+      <div class="cal-date-block ${isToday?'today-block':''}">
+        <div class="mon">${MONTHS[d.getMonth()]}</div>
+        <div class="day">${d.getDate()}</div>
+        <div class="dow">${DAYS[d.getDay()]}</div>
+      </div>
+      <div>
+        <div class="cal-title">${e.title}</div>
+        <div class="cal-sub">${allDay?'All day':fmtTime(e.start)+(e.end?' – '+fmtTime(e.end):'')}${e.location?' · '+e.location:''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── LEAD TIMER ──
+function buildLeads() {
+  const el = document.getElementById('bodyLeads');
+  const leads = [...D.leads].sort((a,b)=>new Date(b.receivedAt)-new Date(a.receivedAt));
+  document.getElementById('cntLeads').textContent = leads.length;
+  if (!leads.length) {
+    const err = (window.DASH_LEADS||{})._error;
+    el.innerHTML = err
+      ? `<div class="empty" style="color:var(--red);font-size:.75rem">⚠️ Feed error: ${err}</div>`
+      : '<div class="empty">No new leads · Feed updates each morning at 7 AM</div>';
+    return;
+  }
+  el.innerHTML = leads.map(l=>{
+    const min = minutesAgo(l.receivedAt);
+    const timerCls = min > 1440 ? 'hot' : min > 60 ? 'hot' : min > 30 ? 'warm' : 'cool';
+    const elapsed = min >= 1440
+      ? `${Math.floor(min/1440)}d ${Math.floor((min%1440)/60)}h`
+      : fmtElapsed(min);
+    const callBtn  = l.phone  ? `<a class="lead-act-btn lab-call"  href="tel:${l.phone.replace(/\D/g,'')}">📞 Call</a>` : '';
+    const emailBtn = l.email  ? `<a class="lead-act-btn lab-email" href="mailto:${l.email}">✉ Email</a>` : '';
+    return `<div class="lead-row">
+      <div>
+        <div class="lead-name">${l.name}</div>
+        <div class="lead-source">${l.source||'CINC'} · ${l.stage||'New'}${l.budget?' · '+l.budget:''}</div>
+        ${l.phone||l.email ? `<div style="font-size:.7rem;color:var(--muted);margin-bottom:2px">${[l.phone,l.email].filter(Boolean).join(' · ')}</div>` : ''}
+        ${l.notes?`<div style="font-size:.7rem;color:var(--muted)">${l.notes}</div>`:''}
+      </div>
+      <div>
+        <div class="lead-timer ${timerCls}">${elapsed}</div>
+        <div class="lead-stage">since received</div>
+        <div class="lead-actions">${callBtn}${emailBtn}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // refresh timer every minute
+  setTimeout(buildLeads, 60000);
+}
+
+// ── THIS WEEK'S ACTIONS ──
+// Checks and local tasks — keys set after data loads so weekOf is available
+let checks = {};
+let localTasks = [];
+let _weekKey = 'todo-checks-week';
+let _localTasksKey = 'local-tasks-week';
+function initTodoStorage() {
+  const wk = D.weeklyActionsWeekOf || 'week';
+  _weekKey = 'todo-checks-' + wk;
+  _localTasksKey = 'local-tasks-' + wk;
+  checks = JSON.parse(localStorage.getItem(_weekKey)||'{}');
+  localTasks = JSON.parse(localStorage.getItem(_localTasksKey)||'[]');
+
+  // Every Sunday: remove completed tasks, carry forward incomplete ones
+  const now = new Date();
+  const sundayKey = 'cleared-' + now.toISOString().slice(0,10);
+  if (now.getDay() === 0 && !localStorage.getItem(sundayKey)) {
+    const doneIds = new Set(Object.keys(checks).filter(k => checks[k]));
+
+    // ── Snapshot BEFORE clearing ───────────────────────────────────────────
+    saveWeeklyArchive(wk);
+
+    // Hide completed wa-* tasks (they come from data file, can't be filtered like localTasks)
+    const hiddenWaIds = [...doneIds].filter(id => id.startsWith('wa-'));
+    if (hiddenWaIds.length) {
+      localStorage.setItem('hidden-wa-' + wk, JSON.stringify(hiddenWaIds));
+    }
+
+    localTasks = localTasks.filter(t => !doneIds.has(t.id));
+    doneIds.forEach(k => delete checks[k]);
+    // Also remove completed IDs from task order so uncompleted tasks rise to top
+    const orderKey = 'task-order-' + (D.weeklyActionsWeekOf||'week');
+    const savedOrder = JSON.parse(localStorage.getItem(orderKey)||'[]');
+    localStorage.setItem(orderKey, JSON.stringify(savedOrder.filter(id => !doneIds.has(id))));
+    saveTodos();
+    saveLocalTasks();
+    localStorage.setItem(sundayKey, '1');
+  }
+}
+function saveTodos() { localStorage.setItem(_weekKey, JSON.stringify(checks)); }
+function saveLocalTasks() { localStorage.setItem(_localTasksKey, JSON.stringify(localTasks)); }
+
+function saveWeeklyArchive(weekOf) {
+  // Build full task list with completion status (wa-* tasks + manual tasks)
+  const allTasks = [];
+  D.weeklyActions.forEach(t => {
+    allTasks.push({ text: t.text, done: !!checks['wa-' + t.id] });
+  });
+  localTasks.forEach(t => {
+    allTasks.push({ text: t.text, done: !!checks[t.id] });
+  });
+  if (!allTasks.length) return;
+  fetch('http://localhost:5678/api/save-weekly-archive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ weekOf, tasks: allTasks })
+  }).catch(() => {}); // silent fail — archive is a bonus, not critical
+}
+
+function openAddTask() {
+  const ov = document.getElementById('addTaskOverlay');
+  ov.style.display = 'flex';
+  setTimeout(()=>document.getElementById('atText').focus(), 50);
+}
+function closeAddTask() {
+  document.getElementById('addTaskOverlay').style.display = 'none';
+  document.getElementById('atText').value = '';
+  document.getElementById('atDue').value = '';
+  document.getElementById('atUrgent').checked = false;
+  document.getElementById('atCat').value = 'admin';
+}
+function saveAddTask() {
+  const text = document.getElementById('atText').value.trim();
+  if (!text) return;
+  const task = {
+    id: 'lt-' + Date.now(),
+    text,
+    category: document.getElementById('atCat').value,
+    dueDate: document.getElementById('atDue').value,
+    priority: document.getElementById('atUrgent').checked ? 'high' : 'medium',
+    done: false
+  };
+  localTasks.unshift(task);      // add to top of local list
+  saveLocalTasks();
+  taskOrder.unshift(task.id);    // prepend to order so it sorts first
+  saveTaskOrder();
+  closeAddTask();
+  buildTodo();
+}
+// ── TASK ORDER ──
+let _orderKey = 'task-order-week';
+let taskOrder = [];
+function saveTaskOrder(){ localStorage.setItem(_orderKey, JSON.stringify(taskOrder)); }
+
+function buildTodo() {
+  const el = document.getElementById('bodyTodo');
+  _orderKey = 'task-order-' + (D.weeklyActionsWeekOf||'week');
+  taskOrder = JSON.parse(localStorage.getItem(_orderKey)||'[]');
+
+  // Load hidden wa-* task IDs (tasks completed and cleared on Sunday)
+  const _hiddenWaKey = 'hidden-wa-' + (D.weeklyActionsWeekOf||'week');
+  const hiddenWaIds = new Set(JSON.parse(localStorage.getItem(_hiddenWaKey)||'[]'));
+
+  let todos = [];
+  D.weeklyActions.forEach(t=>{
+    const id = 'wa-' + t.id;
+    if (hiddenWaIds.has(id)) return;  // skip tasks completed & cleared on Sunday
+    todos.push({id, text:t.text, tag:t.category||'admin', urgent:t.priority==='high', done:t.done||false, dueDate:t.dueDate||''});
+  });
+  localTasks.forEach(t=>{
+    todos.push({id:t.id, text:t.text, tag:t.category||'admin', urgent:t.priority==='high', done:t.done||false, dueDate:t.dueDate||'', local:true});
+  });
+  D.prospects.forEach(p=>{
+    const n=daysUntil(p.nextActionDate);
+    if(n!=null&&n<=0&&p.status==='Active')
+      todos.push({id:'pr-'+p.id,text:`${p.name}: ${p.nextAction}`,tag:'prospect',urgent:n<0});
+  });
+  D.listings.forEach(l=>{
+    [['offerReviewDate','Offer review','listing'],['openHouseDate','Open house','listing'],
+     ['conditionalDate','Conditions remove','urgent'],['completionDate','Completion','urgent'],
+     ['photoSessionDate','Photo session','listing'],['stagingDate','Staging','listing']].forEach(([k,lbl,tag])=>{
+      const n=daysUntil(l[k]);
+      if(n!=null&&n>=0&&n<=1)
+        todos.push({id:`${l.id}-${k}`,text:`${l.address}: ${lbl} ${n===0?'TODAY':'tomorrow'}`,tag,urgent:n===0});
+    });
+  });
+  D.calendar.forEach(e=>{
+    const d=new Date(e.start); d.setHours(0,0,0,0);
+    if(d.getTime()===today.getTime())
+      todos.push({id:'cal-'+e.id,text:`${fmtTime(e.start)} — ${e.title}`,tag:'admin',urgent:false});
+  });
+  D.leads.forEach(l=>{
+    const min=minutesAgo(l.receivedAt);
+    if(min<60&&!checks['lead-called-'+l.id])
+      todos.push({id:'lead-'+l.id,text:`⚡ Call ${l.name} — ${l.source||'CINC'} (${fmtElapsed(min)} ago)${l.phone?' · '+l.phone:''}`,tag:'urgent',urgent:true});
+  });
+  D.fubTasks.forEach(t=>{
+    const n=daysUntil(t.dueDate);
+    if(n!=null&&n<=0)
+      todos.push({id:'fubt-'+t.id,text:`FUB: ${t.description||t.type||'Task'}${t.personName?' — '+t.personName:''}`,tag:'prospect',urgent:n<0});
+  });
+  if(!todos.length){
+    todos=[
+      {id:'d1',text:'Review Canadian Real Estate News report',tag:'admin',urgent:false},
+      {id:'d2',text:'Check FUB for new leads',tag:'prospect',urgent:false},
+      {id:'d3',text:'Client check-in calls',tag:'prospect',urgent:false},
+    ];
+  }
+
+  // Apply saved order — known IDs first, new ones appended at end
+  const orderMap = {};
+  taskOrder.forEach((id,i)=>{ orderMap[id]=i; });
+  todos.sort((a,b)=>{
+    const ai = orderMap[a.id] ?? 9999;
+    const bi = orderMap[b.id] ?? 9999;
+    return ai - bi;
+  });
+
+  document.getElementById('cntTodo').textContent = todos.length;
+  el.innerHTML = todos.map(t=>{
+    const done = checks[t.id] || t.done;
+    const del = t.local ? `<span onclick="deleteLocalTask('${t.id}')" style="margin-left:4px;color:var(--muted);cursor:pointer;font-size:.72rem;opacity:.5" title="Remove">✕</span>` : '';
+    return `<div class="todo-row" draggable="true" data-id="${t.id}"
+      ondragstart="todoDragStart(event)"
+      ondragover="todoDragOver(event)"
+      ondrop="todoDrop(event)"
+      ondragend="todoDragEnd()"
+      ontouchstart="todoTouchStart(event)"
+      ontouchmove="todoTouchMove(event)"
+      ontouchend="todoTouchEnd(event)"
+      style="cursor:default">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      <div class="todo-cb ${done?'done':''}" onclick="toggleTodo('${t.id}',this)"></div>
+      <div class="todo-txt ${done?'done':''}" id="tt-${t.id}">${t.text}${t.dueDate&&!done?` <span style="font-size:.65rem;color:var(--muted)">· due ${t.dueDate}</span>`:''}${t.urgent&&!done?' ⚡':''}</div>
+      <span class="ttag ${t.tag}">${t.tag}</span>${del}
+    </div>`;
+  }).join('');
+}
+
+// ── DRAG & DROP (desktop) ──
+let _dragId = null;
+function todoDragStart(e){
+  _dragId = e.currentTarget.dataset.id;
+  e.currentTarget.style.opacity = '0.4';
+}
+function todoDragOver(e){
+  e.preventDefault();
+  const target = e.currentTarget;
+  target.style.borderTop = '2px solid var(--brand-coral)';
+}
+function todoDrop(e){
+  e.preventDefault();
+  const targetId = e.currentTarget.dataset.id;
+  if (!_dragId || _dragId === targetId) return;
+  reorderTodos(_dragId, targetId);
+}
+function todoDragEnd(){
+  document.querySelectorAll('.todo-row').forEach(r=>{
+    r.style.opacity='';
+    r.style.borderTop='';
+  });
+  _dragId = null;
+}
+
+// ── TOUCH DRAG (iPad) ──
+let _touchDragId=null, _touchClone=null, _touchOffY=0;
+function todoTouchStart(e){
+  if(!e.target.classList.contains('drag-handle')) return;
+  e.preventDefault();
+  _touchDragId = e.currentTarget.dataset.id;
+  const rect = e.currentTarget.getBoundingClientRect();
+  _touchOffY = e.touches[0].clientY - rect.top;
+  _touchClone = e.currentTarget.cloneNode(true);
+  _touchClone.style.cssText = `position:fixed;left:${rect.left}px;width:${rect.width}px;top:${rect.top}px;opacity:.7;pointer-events:none;z-index:999;background:var(--surface);border:1px solid var(--brand-coral);border-radius:6px;`;
+  document.body.appendChild(_touchClone);
+}
+function todoTouchMove(e){
+  if(!_touchClone) return;
+  e.preventDefault();
+  const y = e.touches[0].clientY - _touchOffY;
+  _touchClone.style.top = y+'px';
+  document.querySelectorAll('.todo-row').forEach(r=>r.style.borderTop='');
+  const el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY)?.closest('.todo-row');
+  if(el && el.dataset.id !== _touchDragId) el.style.borderTop='2px solid var(--brand-coral)';
+}
+function todoTouchEnd(e){
+  if(!_touchClone){ _touchDragId=null; return; }
+  _touchClone.remove(); _touchClone=null;
+  const el = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY)?.closest('.todo-row');
+  document.querySelectorAll('.todo-row').forEach(r=>r.style.borderTop='');
+  if(el && el.dataset.id && el.dataset.id !== _touchDragId) reorderTodos(_touchDragId, el.dataset.id);
+  _touchDragId=null;
+}
+
+function reorderTodos(dragId, targetId){
+  const rows = [...document.querySelectorAll('.todo-row')].map(r=>r.dataset.id);
+  const from = rows.indexOf(dragId);
+  const to   = rows.indexOf(targetId);
+  if(from<0||to<0) return;
+  rows.splice(from,1);
+  rows.splice(to,0,dragId);
+  taskOrder = rows;
+  saveTaskOrder();
+  buildTodo();
+}
+
+function toggleTodo(id,el){
+  checks[id]=!checks[id]; saveTodos();
+  el.classList.toggle('done');
+  document.getElementById('tt-'+id)?.classList.toggle('done');
+}
+function deleteLocalTask(id){
+  localTasks = localTasks.filter(t=>t.id!==id);
+  saveLocalTasks();
+  buildTodo();
+}
+
+// ── PROSPECTS ──
+function buildProspects() {
+  const el = document.getElementById('bodyProspects');
+  const active = D.prospects.filter(p=>p.status==='Active')
+    .sort((a,b)=>(daysUntil(a.nextActionDate)??999)-(daysUntil(b.nextActionDate)??999));
+  document.getElementById('cntProspects').textContent=active.length;
+  if(!active.length){el.innerHTML='<div class="empty">Add prospects to data/listings.json</div>';return;}
+  el.innerHTML=active.map(p=>{
+    const n=daysUntil(p.nextActionDate);
+    const uc=urgClass(p.nextActionDate);
+    const action=n==null?p.nextAction:n<0?`⚠️ OVERDUE: ${p.nextAction}`:n===0?`Today: ${p.nextAction}`:p.nextAction;
+    return `<div class="prospect-row">
+      <div>
+        <div class="prospect-name"><span class="udot ${uc}"></span>${p.name}
+          <span style="font-size:.7rem;color:var(--muted);font-weight:400;margin-left:5px">${p.type||''}${p.budget?' · '+p.budget:''}</span>
+        </div>
+        <div class="prospect-meta">${p.notes||''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="prospect-action">${action}</div>
+        <div class="prospect-when">${p.nextActionDate?relDate(p.nextActionDate):''}</div>
+        <button onclick="openProspectModal(${JSON.stringify(p).replace(/"/g,'&quot;')})"
+          style="margin-top:2px;padding:2px 9px;font-size:.65rem;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:5px;cursor:pointer;font-weight:600">✏️ Edit</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openProspectModal(p) {
+  document.getElementById('peId').value        = p.id;
+  document.getElementById('peModalName').textContent = p.name;
+  document.getElementById('peAction').value    = p.nextAction || '';
+  document.getElementById('peDate').value      = p.nextActionDate || '';
+  document.getElementById('peStatus').value    = p.status || 'Active';
+  document.getElementById('peNotes').value     = p.notes || '';
+  document.getElementById('prospectOverlay').style.display = 'flex';
+  setTimeout(()=>document.getElementById('peAction').focus(), 50);
+}
+
+function closeProspectModal() {
+  document.getElementById('prospectOverlay').style.display = 'none';
+}
+
+function saveProspect() {
+  const id     = document.getElementById('peId').value;
+  const fields = {
+    nextAction:     document.getElementById('peAction').value.trim(),
+    nextActionDate: document.getElementById('peDate').value,
+    status:         document.getElementById('peStatus').value,
+    notes:          document.getElementById('peNotes').value.trim(),
+  };
+  fetch('http://localhost:5678/api/update-prospect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, fields })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      // Update in-memory so the card refreshes immediately without a reload
+      const p = D.prospects.find(x => x.id === id);
+      if (p) Object.assign(p, fields);
+      closeProspectModal();
+      buildProspects();
+      buildStats();
+    } else {
+      alert('Save failed: ' + (data.error || 'unknown error'));
+    }
+  })
+  .catch(() => alert('Could not reach the dashboard server. Make sure it is running.'));
+}
+
+// ── VOLUME TRACKER ──
+function buildVolume() {
+  const el=document.getElementById('bodyVolume');
+  const g=D.goals;
+  const now=new Date(); const dayOfYear=Math.floor((now-new Date(now.getFullYear(),0,0))/86400000);
+  const daysInYear=366; const yearPct=dayOfYear/daysInYear;
+
+  // Prefer Excel-sourced data from bizSales; fall back to goals.js closedDeals
+  const biz = D.bizSales || {};
+  const ytdDeals = biz.ytdDeals != null ? biz.ytdDeals : D.closed.length;
+  const ytdVol   = biz.ytdVolume != null ? biz.ytdVolume : D.closed.reduce((s,d)=>s+(d.salePrice||0),0);
+  const ytdGci   = biz.ytdGciPaid != null ? biz.ytdGciPaid : D.closed.reduce((s,d)=>s+(d.commission||0),0);
+
+  const goalDeals=g.deals||0; const goalVol=g.volume||0; const goalGci=g.gci||0;
+  const paceDeals=goalDeals>0?Math.round(ytdDeals/yearPct):0;
+  const onPaceDeals=paceDeals>=goalDeals;
+
+  function bar(current,goal,colorCls){
+    const pct=goal>0?Math.min(100,Math.round(current/goal*100)):0;
+    return `<div class="progress-bar"><div class="progress-fill ${colorCls}" style="width:${pct}%"></div></div>
+            <div style="font-size:.68rem;color:var(--muted)">${pct}% of goal</div>`;
+  }
+
+  el.innerHTML=`
+  <div class="vol-section">
+    <div class="vol-label">Deals Closed</div>
+    <div class="vol-numbers"><div class="vol-current">${ytdDeals}</div><div class="vol-goal">/ ${goalDeals} goal</div></div>
+    ${bar(ytdDeals,goalDeals,'g')}
+    <div class="vol-pace">Pace: ${paceDeals} / yr — <span class="${onPaceDeals?'on-pace':'behind'}">${onPaceDeals?'On pace':'Behind pace'}</span></div>
+  </div>
+  <div class="vol-section">
+    <div class="vol-label">Sales Volume</div>
+    <div class="vol-numbers"><div class="vol-current">${fmtPrice(ytdVol)}</div><div class="vol-goal">/ ${fmtPrice(goalVol)}</div></div>
+    ${bar(ytdVol,goalVol,'')}
+    <div class="vol-pace">Pace: ${fmtPrice(Math.round(ytdVol/yearPct))} / yr</div>
+  </div>
+  <div class="vol-section">
+    <div class="vol-label">GCI</div>
+    <div class="vol-numbers"><div class="vol-current">${fmtPrice(ytdGci)}</div><div class="vol-goal">/ ${fmtPrice(goalGci)}</div></div>
+    ${bar(ytdGci,goalGci,'a')}
+    <div class="vol-pace">Pace: ${fmtPrice(Math.round(ytdGci/yearPct))} / yr</div>
+  </div>`;
+}
+
+// ── QUICK COMPOSE ──
+const PROMPTS = [
+  { icon:'🏡', label:'Listing Intro Email', sub:'New listing announcement to client',
+    prompt:`I have a new listing. Please write a professional listing announcement email for my seller client. Use my Momentum / Otto style. I'll provide the property details:
+Address: [ADDRESS]
+List Price: [PRICE]
+Key Features: [FEATURES]
+Open House: [DATE/TIME or none]` },
+  { icon:'📋', label:'Offer Follow-Up', sub:'After submitting or receiving an offer',
+    prompt:`Please draft a professional follow-up email after [submitting/receiving] an offer.
+Property: [ADDRESS]
+Offer Price: [PRICE]
+Conditions: [CONDITIONS]
+Recipient: [BUYER/SELLER NAME]
+Tone: warm, professional, clear on next steps.` },
+  { icon:'📉', label:'Price Reduction Talk', sub:'Script for price reduction conversation',
+    prompt:`Please prepare a price reduction conversation script for a listing seller. This is for an in-person or phone call, not an email.
+Address: [ADDRESS]
+Current Price: [PRICE]
+Days on Market: [DOM]
+Avg DOM in area: [AVG DOM]
+Recent comparable sales: [COMPS]
+Suggested new price: [NEW PRICE]
+Keep it empathetic, data-driven, and solution-focused.` },
+  { icon:'🚪', label:'Open House Follow-Up', sub:'Post open house buyer nurture',
+    prompt:`Please write open house follow-up emails for buyers who attended my open house.
+Property: [ADDRESS]
+Open House Date: [DATE]
+Write 3 versions: (1) Hot lead — expressed strong interest. (2) Warm lead — liked it but not sure. (3) Cold lead — just browsing.
+From: Aaron Müller, Momentum Realty` },
+  { icon:'🤝', label:'Buyer Consult Prep', sub:'Pre-meeting research and agenda',
+    prompt:`Please help me prepare for a buyer consultation meeting.
+Client Name: [NAME]
+Budget: [BUDGET]
+Area of interest: South Surrey / White Rock / Langley
+Property type: [TYPE]
+Timeline: [TIMELINE]
+Generate: a suggested agenda, 5 discovery questions, and current market context I should share.` },
+  { icon:'📲', label:'Prospect Re-Engagement', sub:'Reconnect with a cold lead',
+    prompt:`Please write a re-engagement message for a prospect I haven't spoken to in [TIMEFRAME].
+Name: [NAME]
+Context: [WHAT WE LAST DISCUSSED]
+Channel: [Email / Text / DM]
+Goal: Restart the conversation naturally, not pushy.
+Use my Aaron Müller, Momentum Realty voice.` },
+  { icon:'📱', label:'Social Media Post', sub:'Instagram / Facebook market update',
+    prompt:`Please write a social media post for [Instagram/Facebook] about the current Fraser Valley real estate market.
+Key stat to highlight: [STAT — e.g. "FVREB benchmark $893K, down 7.9% YoY on detached"]
+Tone: Authoritative but approachable, not salesy.
+Include: a hook, the insight, a call to action.
+Add 5 relevant hashtags.
+My name: Aaron Müller | Momentum Realty | South Surrey` },
+  { icon:'📊', label:'Market Update Email', sub:'Monthly market update to database',
+    prompt:`Please write my monthly market update email to my database for [MONTH] 2026.
+Include:
+- Fraser Valley benchmark: $893,300 (−0.7% MoM, −7.9% YoY on detached)
+- Bank of Canada rate: 2.25% (held)
+- National sales: +5.5% in May
+- Local insight: [ADD YOUR LOCAL OBSERVATION]
+- Call to action: invite replies with questions
+Tone: Trusted advisor, clear and useful, not a sales pitch.
+From: Aaron Müller, Momentum Realty` },
+];
+
+function buildCompose() {
+  const el = document.getElementById('bodyCompose');
+  el.innerHTML = PROMPTS.map((p,i)=>`
+    <div class="compose-btn" onclick="copyPrompt(${i})">
+      <div class="compose-icon">${p.icon}</div>
+      <div><div class="compose-label">${p.label}</div><div class="compose-sub">${p.sub}</div></div>
+    </div>`).join('');
+}
+
+function copyPrompt(i) {
+  navigator.clipboard.writeText(PROMPTS[i].prompt).then(()=>{
+    showToast('✓ Prompt copied — paste into Claude');
+  }).catch(()=>{ showToast('Open in Chrome to copy prompts'); });
+}
+
+// ── REPORTS ──
+function buildReports() {
+  const el = document.getElementById('bodyReports');
+  const tasks = D.scheduled;
+  if (!tasks.length) { el.innerHTML='<div class="empty">No scheduled tasks</div>'; return; }
+  const colors = ['b','g','a'];
+
+  // Render cards immediately, then resolve "Latest Report" links async for report tasks
+  el.innerHTML = tasks.map((t,i)=>{
+    const c = colors[i]||'b';
+    const reportBtn = t.reportPattern
+      ? `<button id="rlink-${t.id}" class="rlink ${c}" onclick="openLatestReport('${t.reportPattern}','${t.id}')" style="cursor:pointer">📄 Latest Report</button>`
+      : '';
+    return `<div class="report-card">
+      <div class="report-label">${t.label}</div>
+      <span class="task-pill ${t.enabled?'on':'off'}">${t.enabled?'Active':'Paused'}</span>
+      <div class="report-sched">⏰ ${t.schedule}</div>
+      <div class="report-meta">Last: ${t.lastRun||'never'} · Next: ${t.nextRun||'—'}</div>
+      <div class="rlinks">${reportBtn}</div>
+    </div>`;
+  }).join('');
+}
+
+function openLatestReport(prefix, taskId) {
+  fetch(`http://localhost:5678/api/latest-report?prefix=${encodeURIComponent(prefix)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.url) {
+        window.open(`http://localhost:5678${data.url}`, '_blank');
+      } else {
+        alert('No report found yet for this task.');
+      }
+    })
+    .catch(() => alert('Could not reach the dashboard server. Make sure it is running.\n\nRestart it by running: python3 ~/Desktop/Claude/Dashboard/server.py'));
+}
+
+// ── CLOCK ──
+function tick() {
+  const n=new Date();
+  document.getElementById('topbarDate').textContent =
+    DAYS[n.getDay()]+', '+MONTHS[n.getMonth()]+' '+n.getDate()+', '+n.getFullYear()+
+    '  ·  '+n.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'});
+}
+tick(); setInterval(tick,60000);
+// ── THIS WEEK'S ACTIONS ──
+function buildWeeklyActions() {
+  const el = document.getElementById('bodyActions');
+  if (!el) return;
+  const tasks = D.weeklyActions;
+  const weekOf = D.weeklyActionsWeekOf;
+  const source = D.weeklyActionsSource;
+
+  // Week label
+  const woEl = document.getElementById('actionsWeekOf');
+  if (woEl && weekOf) {
+    const d = new Date(weekOf + 'T12:00:00');
+    const end = new Date(d); end.setDate(d.getDate() + 6);
+    const fmt = dt => dt.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+    woEl.textContent = `Week of ${fmt(d)} – ${fmt(end)}`;
+  }
+  if (source === 'todoist') {
+    const badge = document.getElementById('actionsWeekOf');
+    if (badge) badge.textContent += ' · Todoist';
+  }
+
+  if (!tasks.length) {
+    el.innerHTML = '<div class="empty">No tasks this week — tell Claude what to add</div>';
+    return;
+  }
+
+  const prioConfig = {
+    high:   { cls:'color:#991b1b;background:rgba(220,38,38,.1)',   label:'High'   },
+    medium: { cls:'color:#92400e;background:rgba(217,119,6,.1)',   label:'Medium' },
+    low:    { cls:'color:#065f46;background:rgba(5,150,105,.1)',   label:'Low'    },
+  };
+  const catColors = {
+    followup:  '#3b82f6', listing:'#0d9488', buyer:'#7c3aed',
+    admin:'#78716c', marketing:'#db2777', training:'#d97706', personal:'#6b7280'
+  };
+
+  const done   = tasks.filter(t => t.done);
+  const active = tasks.filter(t => !t.done);
+
+  function renderTask(t) {
+    const p = prioConfig[t.priority] || prioConfig.medium;
+    const catColor = catColors[t.category] || '#78716c';
+    const catLabel = (t.category||'').charAt(0).toUpperCase() + (t.category||'').slice(1);
+    return `<div style="padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;${t.done?'opacity:0.45':''}">
+      <div style="margin-top:2px;width:16px;height:16px;border-radius:50%;border:2px solid ${t.done?'var(--green)':'var(--border)'};flex-shrink:0;background:${t.done?'var(--green)':'transparent'};display:flex;align-items:center;justify-content:center">
+        ${t.done?'<svg width="8" height="6" viewBox="0 0 8 6"><path d="M1 3l2 2 4-4" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>':''}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.83rem;font-weight:500;color:var(--text);${t.done?'text-decoration:line-through;color:var(--muted)':''}">${t.text}</div>
+        ${t.dueDate ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:2px">${new Date(t.dueDate+'T12:00:00').toLocaleDateString('en-CA',{weekday:'short',month:'short',day:'numeric'})}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
+        ${catLabel ? `<span style="font-size:0.6rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:2px 6px;border-radius:6px;background:${catColor}18;color:${catColor}">${catLabel}</span>` : ''}
+        <span style="font-size:0.6rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:2px 6px;border-radius:6px;${p.cls}">${p.label}</span>
+      </div>
+    </div>`;
+  }
+
+  const doneCount = done.length;
+  const totalCount = tasks.length;
+  const pct = totalCount > 0 ? Math.round(doneCount/totalCount*100) : 0;
+
+  el.innerHTML = `
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+      <div style="flex:1"><div class="progress-bar" style="height:6px"><div class="progress-fill g" style="width:${pct}%"></div></div></div>
+      <div style="font-size:0.75rem;font-weight:600;color:var(--muted);white-space:nowrap">${doneCount}/${totalCount} done</div>
+    </div>
+    ${active.map(renderTask).join('')}
+    ${done.length ? `<div style="padding:6px 14px 2px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);background:var(--surface2)">Completed</div>${done.map(renderTask).join('')}` : ''}`;
+}
+
+// ── SALES TRACKER ──
+function buildSalesTracker() {
+  const el = document.getElementById('bodySales');
+  if (!el) return;
+  const s = D.bizSales;
+  if (!s || !s.gciGoal) { el.innerHTML='<div class="empty">No sales data loaded</div>'; return; }
+
+  const gciPaid = s.ytdGciPaid || 0;
+  const gciProj = s.ytdGciProjected || 0;
+  const gciGoal = s.gciGoal || 360000;
+  const pipeline = Math.max(0, gciProj - gciPaid);
+  const dealGoal = s.dealGoal || 24;
+  const ytdDeals = s.ytdDeals || 0;
+  const ytdVol   = s.ytdVolume || 0;
+  const paidPct  = Math.min(100, Math.round(gciPaid / gciGoal * 100));
+  const projPct  = Math.min(100, Math.round(gciProj / gciGoal * 100));
+  const dealPct  = Math.min(100, Math.round(ytdDeals / dealGoal * 100));
+
+  const deals = (s.deals || []).filter(d => d.mls && d.client);
+  const closedDeals = deals.filter(d => d.dateClosed && d.soldPrice > 0);
+  const activeDeals = deals.filter(d => !d.dateClosed || d.soldPrice === 0);
+
+  el.innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--border)">
+    <div style="padding:14px 16px;border-right:1px solid var(--border)">
+      <div class="vol-label">GCI Paid YTD</div>
+      <div class="vol-numbers"><span class="vol-current">$${Math.round(gciPaid/1000)}K</span><span class="vol-goal">/ $${Math.round(gciGoal/1000)}K goal</span></div>
+      <div class="progress-bar"><div class="progress-fill g" style="width:${paidPct}%"></div></div>
+      <div class="vol-pace">${paidPct}% of annual goal · <span class="${gciProj>=gciGoal*0.5?'on-pace':'behind'}">${projPct}% projected (incl. pipeline)</span></div>
+      <div style="margin-top:10px" class="vol-label">GCI Pipeline (conditions/pending)</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--amber)">$${Math.round(pipeline/1000)}K</div>
+    </div>
+    <div style="padding:14px 16px">
+      <div class="vol-label">Deals Closed YTD</div>
+      <div class="vol-numbers"><span class="vol-current">${ytdDeals}</span><span class="vol-goal">/ ${dealGoal} goal</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${dealPct}%"></div></div>
+      <div class="vol-pace">${dealPct}% of annual goal</div>
+      <div style="margin-top:10px" class="vol-label">Volume Closed YTD</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text)">$${(ytdVol/1000000).toFixed(2)}M</div>
+    </div>
+  </div>
+  <div style="padding:10px 14px 4px;font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted)">All Deals This Year</div>
+  ${deals.map(d=>{
+    const isPaid = d.commPaid > 0;
+    const isClosed = d.dateClosed && d.soldPrice > 0;
+    const badge = isPaid
+      ? `<span class="sbadge sb-active">Paid</span>`
+      : isClosed ? `<span class="sbadge sb-cond">Closing</span>`
+      : `<span class="sbadge" style="background:rgba(13,148,136,.1);color:#0d9488">Active</span>`;
+    const comm = isPaid ? `<span style="color:var(--green);font-weight:600">$${d.commPaid.toLocaleString('en-CA',{maximumFractionDigits:0})} paid</span>`
+      : d.commProjected ? `<span style="color:var(--amber)">$${d.commProjected.toLocaleString('en-CA',{maximumFractionDigits:0})} projected</span>` : '';
+    return `<div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-size:0.83rem;font-weight:600;color:var(--text)">${d.client} <span style="font-weight:400;color:var(--muted);font-size:0.75rem">· ${d.type}</span></div>
+        <div style="font-size:0.7rem;color:var(--muted)">${d.address}${d.dateClosed?' · Closes '+d.dateClosed:''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">${badge}<br><span style="font-size:0.72rem">${comm}</span></div>
+    </div>`;
+  }).join('')}`;
+}
+
+// ── LEAD AGING QUEUE ──
+function buildAgingQueue() {
+  const el = document.getElementById('bodyAging');
+  const cnt = document.getElementById('cntAging');
+  if (!el) return;
+  const now = Date.now();
+  const MS_HR = 3600000;
+
+  const aged = (D.leads || []).map(l => {
+    const recv = l.receivedAt ? new Date(l.receivedAt).getTime() : 0;
+    const hrs = recv ? Math.floor((now - recv) / MS_HR) : 9999;
+    let bucket, bucketCls, bucketColor;
+    if (hrs < 24)       { bucket='Fresh';   bucketCls='fresh';   bucketColor='#16A34A'; }
+    else if (hrs < 168) { bucket='Warm';    bucketCls='warm';    bucketColor='#D97706'; }
+    else if (hrs < 720) { bucket='Cooling'; bucketCls='cooling'; bucketColor='#B45309'; }
+    else                { bucket='Cold';    bucketCls='cold';    bucketColor='#6B7280'; }
+    return { ...l, hrs, bucket, bucketCls, bucketColor };
+  }).sort((a,b) => a.hrs - b.hrs);
+
+  cnt.textContent = aged.length;
+  if (!aged.length) {
+    const err = (window.DASH_LEADS||{})._error;
+    el.innerHTML = err
+      ? `<div class="empty" style="color:var(--red);font-size:.75rem">⚠️ Feed error: ${err}</div>`
+      : '<div class="empty">No leads in queue</div>';
+    return;
+  }
+
+  // Group by bucket
+  const buckets = ['Fresh','Warm','Cooling','Cold'];
+  const grouped = {};
+  buckets.forEach(b => { grouped[b] = aged.filter(l => l.bucket===b); });
+
+  el.innerHTML = buckets.filter(b => grouped[b].length).map(b => {
+    const color = grouped[b][0].bucketColor;
+    const rows = grouped[b].map(l => {
+      const days = l.hrs >= 24 ? `${Math.floor(l.hrs/24)}d` : `${l.hrs}h`;
+      const name = l.name || l.email || 'Unknown';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:.78rem;font-weight:600;color:var(--text)">${name}</div>
+          <div style="font-size:.66rem;color:var(--muted)">${l.source||'Unknown source'} · ${l.stage||''}</div>
+        </div>
+        <span style="font-size:.68rem;font-weight:700;color:${color};white-space:nowrap;margin-left:8px">${days}</span>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:10px">
+      <div style="font-size:.68rem;font-weight:700;color:${color};letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">${b} · ${grouped[b].length}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+// ── CRITICAL DATES ──
+function buildCriticalDates() {
+  const el = document.getElementById('bodyDates');
+  const cnt = document.getElementById('cntDates');
+  if (!el) return;
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const events = [];
+
+  (D.listings || []).forEach(l => {
+    const add = (label, dateStr, type) => {
+      if (!dateStr) return;
+      const d = new Date(dateStr); d.setHours(0,0,0,0);
+      const diff = Math.round((d - today) / 86400000);
+      if (diff >= -1) events.push({ label, date: d, diff, address: l.address, type });
+    };
+    add('Completion', l.completionDate, 'completion');
+    add('Subject Removal', l.conditionalDate, 'conditional');
+    add('Offer Review', l.offerReviewDate, 'offer');
+    add('Open House', l.openHouseDate, 'openhouse');
+    add('Photo Session', l.photoSessionDate, 'photo');
+    add('Staging', l.stagingDate, 'staging');
+  });
+
+  // Add calendar events that look like critical dates
+  (D.calendar || []).filter(e => {
+    const kw = /subject|remov|complet|possess|condition|signing|notary|convey/i;
+    return kw.test(e.title||'') || kw.test(e.description||'');
+  }).forEach(e => {
+    const d = new Date(e.start); d.setHours(0,0,0,0);
+    const diff = Math.round((d - today) / 86400000);
+    if (diff >= -1) events.push({ label: e.title, date: d, diff, address: '', type: 'calendar' });
+  });
+
+  events.sort((a,b) => a.diff - b.diff);
+  cnt.textContent = events.length;
+
+  if (!events.length) { el.innerHTML='<div class="empty">No upcoming critical dates</div>'; return; }
+
+  const typeColor = { completion:'#7C3AED', conditional:'#DC2626', offer:'#D97706', openhouse:'#2563EB', photo:'#0891B2', staging:'#059669', calendar:'#6B7280' };
+  const typeLabel = { completion:'Completion', conditional:'Subjects Due', offer:'Offer Review', openhouse:'Open House', photo:'Photos', staging:'Staging', calendar:'Calendar' };
+
+  el.innerHTML = events.map(ev => {
+    const color = typeColor[ev.type] || '#6B7280';
+    const tl = typeLabel[ev.type] || ev.label;
+    let urgency = '';
+    if (ev.diff <= 0) urgency = `<span style="font-size:.62rem;font-weight:700;color:#DC2626;margin-left:4px">TODAY${ev.diff<0?' (PAST)':''}</span>`;
+    else if (ev.diff <= 3) urgency = `<span style="font-size:.62rem;font-weight:700;color:#D97706;margin-left:4px">in ${ev.diff}d ⚡</span>`;
+    else urgency = `<span style="font-size:.62rem;color:var(--muted);margin-left:4px">in ${ev.diff}d</span>`;
+    const dateStr = ev.date.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <div style="width:3px;min-height:36px;border-radius:2px;background:${color};flex-shrink:0;margin-top:2px"></div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:.68rem;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em">${tl}</span>
+          ${urgency}
+        </div>
+        <div style="font-size:.76rem;color:var(--text);font-weight:500">${ev.address || ev.label}</div>
+        <div style="font-size:.67rem;color:var(--muted)">${dateStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── COMPETITOR INTEL ──
+function buildCompetitors() {
+  const el = document.getElementById('bodyCompetitors');
+  if (!el) return;
+  const comps = D.competitors || [];
+  if (!comps.length) { el.innerHTML = '<div class="empty">No competitor data</div>'; return; }
+
+  const levelColor = { 'Very active': '#D64B1E', 'Active': '#E5890A', 'Moderate': '#3B7D3C' };
+
+  const btn = (label, url, bg, border, color) => url
+    ? `<button onclick="window.open('${url}','_blank')" style="font-size:.63rem;padding:3px 9px;border-radius:6px;background:${bg};border:${border};color:${color};font-weight:600;cursor:pointer;white-space:nowrap">${label}</button>`
+    : '';
+
+  el.innerHTML = comps.map(c => {
+    const chips = c.platforms.map(p => `<span style="font-size:.62rem;background:var(--surface2);padding:1px 6px;border-radius:10px;color:var(--muted)">${p}</span>`).join(' ');
+    const lvlColor = levelColor[c.activityLevel] || 'var(--muted)';
+    const themesHtml = c.themes.map(t => `<div style="font-size:.68rem;color:var(--muted);line-height:1.4">· ${t}</div>`).join('');
+    const igBtn  = btn('Instagram ↗', c.instagram,  '#E1306C', 'none',                    '#fff');
+    const fbBtn  = btn('Facebook ↗',  c.facebook,   '#1877F2', 'none',                    '#fff');
+    const adsBtn = btn('View Ads ↗',  c.fbAdLibrary, c.color,  'none',                    '#fff');
+    const webBtn = btn('Website ↗',   c.website,    'transparent', `1px solid ${c.color}`, c.color);
+    return `<div style="background:${c.colorBg};border:1px solid ${c.color}30;border-radius:10px;padding:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:34px;height:34px;border-radius:50%;background:${c.color};color:#fff;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${c.initials}</div>
+        <div>
+          <div style="font-weight:700;font-size:.82rem;color:var(--text)">${c.name}</div>
+          <div style="font-size:.67rem;color:var(--muted)">${c.brokerage}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+        ${chips}
+        <span style="font-size:.62rem;font-weight:600;color:${lvlColor};margin-left:2px">${c.postFreq}</span>
+      </div>
+      ${themesHtml}
+      <div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">
+        ${igBtn}${fbBtn}${adsBtn}${webBtn}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function checkAllAds() {
+  const comps = D.competitors || [];
+  if (!comps.length) return;
+  const status = document.getElementById('adsStatus');
+  // Open Facebook Ad Library for each competitor in new tabs
+  comps.forEach((c, i) => {
+    setTimeout(() => window.open(c.fbAdLibrary, '_blank'), i * 300);
+  });
+  if (status) {
+    status.style.display = 'block';
+    status.innerHTML = `Opened Meta Ad Library for ${comps.length} competitors · <a href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=CA&q=South+Surrey+Realtor&search_type=keyword_unordered" target="_blank" style="color:#E05A2B">Search all South Surrey agents ↗</a>`;
+  }
+}
+
+// ── INTEGRITY TRACKER ──
+function buildIntegrityTracker() {
+  const el = document.getElementById('bodyIntegrity');
+  if (!el) return;
+  const ig = D.bizIntegrity;
+  if (!ig || !ig.activities) { el.innerHTML='<div class="empty">No integrity data loaded</div>'; return; }
+
+  // Merge localStorage overrides into activity data (thisWeek only)
+  let overrides = {};
+  try { overrides = JSON.parse(localStorage.getItem(getIntegrityKey()) || '{}'); } catch(e){}
+  const rawA = ig.activities;
+  const a = {};
+  Object.keys(rawA).forEach(k => {
+    a[k] = Object.assign({}, rawA[k]);
+    if (overrides[k] !== undefined) a[k].thisWeek = overrides[k];
+  });
+  // Also apply overrides for keys that may only exist in localStorage
+  Object.keys(overrides).forEach(k => {
+    if (!a[k]) a[k] = { thisWeek: overrides[k], lastWeek: 0, ytd: 0 };
+  });
+  const goals = ig.weeklyGoals || {};
+  const wk = ig.currentWeek || '—';
+
+  const apptItems = [
+    { label:'Listing Presentation | CMA',          key:'listingPresentation' },
+    { label:'Listing Signed',                      key:'listingSigned' },
+    { label:'Buyer Consultation | First Meeting',  key:'buyerConsultation' },
+    { label:'Buyer Showings',                      key:'buyerShowings' },
+    { label:'Offer Receipt | Writing | Negotiations', key:'offerNegotiations' },
+    { label:'Price Reduction',                     key:'priceReduction' },
+  ];
+  const actItems = [
+    { label:'Calls',              key:'calls',            goal: goals.calls },
+    { label:'Texts/Messages',     key:'texts',            goal: goals.texts },
+    { label:'Emails',             key:'emails',           goal: goals.emails },
+    { label:'CINC Follow Up',     key:'cincFollowUp',     goal: goals.cincFollowUp },
+    { label:'Door Knocking',      key:'doorKnocking',     goal: null },
+    { label:'Videos',             key:'videos',           goal: null },
+    { label:'SOI Coffee/Meeting', key:'soiMeetings',      goal: null },
+    { label:'DTUs | Drop Bys',    key:'dtuDropBys',       goal: null },
+    { label:'Handwritten Note',   key:'handwrittenNotes', goal: null },
+  ];
+
+  function bar(val, goal) {
+    if (!goal) return '';
+    const pct = Math.min(100, Math.round(val/goal*100));
+    const cls = pct>=100?'g':pct>=60?'':'a';
+    return `<div class="progress-bar" style="margin-top:3px;height:3px"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>`;
+  }
+
+  function row(label, data, goal) {
+    const thisWk = (data||{}).thisWeek || 0;
+    const lastWk = (data||{}).lastWeek || 0;
+    const ytd    = (data||{}).ytd || 0;
+    const goalTxt = goal ? `<span style="color:var(--muted)">/${goal}</span>` : '';
+    return `<div style="display:grid;grid-template-columns:1fr 60px 60px 70px;gap:6px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--border);font-size:0.78rem">
+      <div style="color:var(--text)">${label}${bar(thisWk,goal)}</div>
+      <div style="text-align:center;font-weight:600;color:var(--text)">${thisWk}${goalTxt}</div>
+      <div style="text-align:center;color:var(--muted)">${lastWk}</div>
+      <div style="text-align:center;font-weight:600;color:var(--accent)">${ytd}</div>
+    </div>`;
+  }
+
+  el.innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 60px 60px 70px;gap:6px;padding:6px 14px 4px;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);border-bottom:2px solid var(--border)">
+    <div>Activity</div><div style="text-align:center">Wk ${wk}</div><div style="text-align:center">Wk ${wk-1}</div><div style="text-align:center">YTD</div>
+  </div>
+  <div style="padding:6px 14px 2px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent);background:rgba(13,148,136,.05)">Appointments</div>
+  ${apptItems.map(i=>row(i.label, a[i.key], i.goal)).join('')}
+  <div style="padding:6px 14px 2px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--purple);background:rgba(109,40,217,.05)">Activities</div>
+  ${actItems.map(i=>row(i.label, a[i.key], i.goal)).join('')}
+  <div style="display:grid;grid-template-columns:1fr 60px 60px 70px;gap:6px;padding:8px 14px;font-size:0.8rem;font-weight:700;background:var(--surface2);color:var(--text)">
+    <div>TOTAL</div>
+    <div style="text-align:center">${(a.totalAppointments||{}).thisWeek||0}</div>
+    <div style="text-align:center;color:var(--muted)">${(a.totalAppointments||{}).lastWeek||0}</div>
+    <div style="text-align:center;color:var(--accent)">${(a.totalAppointments||{}).ytd||0}</div>
+  </div>`;
+}
+
+// ── INTEGRITY TRACKER MANUAL OVERRIDE ──
+function getIntegrityKey() {
+  const now = new Date();
+  // ISO week number
+  const jan4 = new Date(now.getFullYear(), 0, 4);
+  const startOfWeek1 = new Date(jan4);
+  startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  const weekNum = Math.floor((now - startOfWeek1) / (7 * 86400000)) + 1;
+  return `integrity-override-${now.getFullYear()}-w${weekNum}`;
+}
+
+function openIntegrityModal() {
+  const ig = D.bizIntegrity;
+  const a = ig && ig.activities ? ig.activities : {};
+  const goals = ig && ig.weeklyGoals ? ig.weeklyGoals : {};
+
+  // Load any existing overrides
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(getIntegrityKey()) || '{}'); } catch(e){}
+
+  const apptItems = [
+    { label:'Listing Presentation | CMA',             key:'listingPresentation' },
+    { label:'Listing Signed',                         key:'listingSigned' },
+    { label:'Buyer Consultation | First Meeting',     key:'buyerConsultation' },
+    { label:'Buyer Showings',                         key:'buyerShowings' },
+    { label:'Offer Receipt | Writing | Negotiations', key:'offerNegotiations' },
+    { label:'Price Reduction',                        key:'priceReduction' },
+  ];
+  const actItems = [
+    { label:'Calls',              key:'calls',            goal: goals.calls },
+    { label:'Texts/Messages',     key:'texts',            goal: goals.texts },
+    { label:'Emails',             key:'emails',           goal: goals.emails },
+    { label:'CINC Follow Up',     key:'cincFollowUp',     goal: goals.cincFollowUp },
+    { label:'Door Knocking',      key:'doorKnocking' },
+    { label:'Videos',             key:'videos' },
+    { label:'SOI Coffee/Meeting', key:'soiMeetings' },
+    { label:'DTUs | Drop Bys',    key:'dtuDropBys' },
+    { label:'Handwritten Note',   key:'handwrittenNotes' },
+  ];
+
+  function field(item) {
+    const src = a[item.key] || {};
+    const cur = saved[item.key] !== undefined ? saved[item.key] : (src.thisWeek !== undefined ? src.thisWeek : '');
+    const goalHint = item.goal ? ` (goal: ${item.goal})` : '';
+    return `<div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:.7rem;color:var(--muted);font-weight:600">${item.label}${goalHint}</label>
+      <input data-key="${item.key}" type="number" min="0" value="${cur}"
+        style="padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.88rem;width:100%;box-sizing:border-box"
+        onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--border)'">
+    </div>`;
+  }
+
+  document.getElementById('intApptFields').innerHTML = apptItems.map(field).join('');
+  document.getElementById('intActFields').innerHTML  = actItems.map(field).join('');
+
+  const overlay = document.getElementById('integrityOverlay');
+  overlay.style.display = 'flex';
+  // Focus first input
+  setTimeout(() => { const f = overlay.querySelector('input'); if(f) f.focus(); }, 50);
+}
+
+function closeIntegrityModal() {
+  document.getElementById('integrityOverlay').style.display = 'none';
+}
+
+function saveIntegrityNumbers() {
+  const inputs = document.querySelectorAll('#integrityOverlay input[data-key]');
+  const overrides = {};
+  let anyValue = false;
+  inputs.forEach(inp => {
+    const val = inp.value.trim();
+    if (val !== '') {
+      overrides[inp.dataset.key] = parseInt(val, 10) || 0;
+      anyValue = true;
+    }
+  });
+  if (anyValue) {
+    localStorage.setItem(getIntegrityKey(), JSON.stringify(overrides));
+  }
+  closeIntegrityModal();
+  buildIntegrityTracker();
+  updateClearOverridesBtn();
+}
+
+function clearIntegrityOverrides() {
+  localStorage.removeItem(getIntegrityKey());
+  buildIntegrityTracker();
+  updateClearOverridesBtn();
+}
+
+function updateClearOverridesBtn() {
+  const btn = document.getElementById('btnClearOverrides');
+  if (!btn) return;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(getIntegrityKey()) || '{}'); } catch(e){}
+  btn.style.display = Object.keys(saved).length > 0 ? 'inline-block' : 'none';
+}
+
+loadAllData(); setInterval(()=>location.reload(),300000);
+
+// ── SERVICE WORKER (PWA offline support) ──
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

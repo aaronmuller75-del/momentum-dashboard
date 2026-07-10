@@ -1,0 +1,22 @@
+window.DASH_PULSE = {
+  "_comment": "Updated by the daily data refresh task each weekday morning",
+  "bocRate": 2.25,
+  "primeRate": 4.45,
+  "bestFixed5yr": 4.0,
+  "bestVariable": 3.3,
+  "fvBenchmark": 893300,
+  "fvBenchmarkChange": -0.7,
+  "fvDetachedBenchmark": 1366500,
+  "fvDetachedYoYChange": -7.9,
+  "fvActiveListings": 9816,
+  "fvActiveListingsVsAvg": 45,
+  "fvAvgDomDetached": 35,
+  "fvAvgDomTownhome": 37,
+  "fvAvgDomCondo": 40,
+  "nationalAvgPrice": 702079,
+  "nationalAvgPriceYoYChange": 1.5,
+  "nationalSalesChange": 5.5,
+  "marketTrend": "balanced",
+  "lastUpdated": "2026-06-24",
+  "source": "FVREB / CREA June 2026"
+};
