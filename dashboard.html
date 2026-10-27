@@ -5,11 +5,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aaron Müller — Realtor Dashboard</title>
 <script>
-  // If opened as a local file, redirect to the server so localStorage stays consistent
-  if (location.protocol === 'file:') {
-    location.replace('http://localhost:5678/dashboard.html');
+  // ── Password Gate ──────────────────────────────────────────────────────────
+  // SHA-256 hash of the dashboard password. To change: run this in console:
+  //   crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourpassword'))
+  //     .then(b => console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')))
+  const PASS_HASH = '9555632cd39f0f1fc0bdf3377d4763dabbe1fcf7fc886fd04a23d66f8f84df0e';
+  const SESSION_KEY = 'dash-auth-v1';
+
+  async function hashPassword(pw) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+    return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2,'0')).join('');
   }
+
+  async function checkAuth() {
+    if (localStorage.getItem(SESSION_KEY) === PASS_HASH) return; // already logged in
+    // Show login overlay
+    document.getElementById('dash-login').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  async function submitPassword() {
+    const pw = document.getElementById('dash-pw-input').value;
+    const hash = await hashPassword(pw);
+    if (hash === PASS_HASH) {
+      localStorage.setItem(SESSION_KEY, hash);
+      document.getElementById('dash-login').style.display = 'none';
+      document.body.style.overflow = '';
+    } else {
+      document.getElementById('dash-pw-error').style.display = 'block';
+      document.getElementById('dash-pw-input').value = '';
+      document.getElementById('dash-pw-input').focus();
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', checkAuth);
 </script>
+<!-- Supabase client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <!-- PWA -->
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#002072">
@@ -122,11 +154,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
   .stat-item:nth-child(4) { border-top: 1px solid rgba(255,255,255,0.12); border-right: none; }
   .stat-item:nth-child(5) { border-top: 1px solid rgba(255,255,255,0.12); }
   .stat-item:nth-child(6) { border-top: 1px solid rgba(255,255,255,0.12); border-right: none; }
-  .topbar { padding: 0 14px; min-height: 50px; }
+  .topbar { padding: 0 14px; min-height: 50px; flex-wrap: wrap; gap: 4px; }
   .topbar-logo svg { height: 22px; }
   .topbar-subtitle { font-size: 0.65rem; }
+  .topbar-date { display: none; }
+  .last-upd { display: none; }
   .pulse-banner { overflow-x: auto; }
   .volume-grid { grid-template-columns: 1fr 1fr !important; }
+  .refresh-btn { font-size: 0.8rem; padding: 7px 16px; }
 }
 .card-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 9px; border-bottom: 1px solid var(--border); border-left: 3px solid var(--brand-coral); }
 .card-title { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 7px; }
@@ -249,6 +284,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
 .ttag.prospect { background: rgba(59,130,246,.1); color: #1d4ed8; }
 .ttag.admin    { background: rgba(120,113,108,.15); color: #57534e; }
 .ttag.urgent   { background: rgba(220,38,38,.1);  color: #991b1b; }
+.ttag.calendar { background: rgba(139,92,246,.12); color: #6d28d9; }
 
 /* ── VOLUME TRACKER ── */
 .volume-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
@@ -304,9 +340,94 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: white; padding: 10px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; z-index: 999; opacity: 0; transform: translateY(10px); transition: all .25s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── TAB NAV ── */
+.tab-nav { display:flex; align-items:center; background:var(--brand-blue); border-bottom:3px solid var(--brand-coral); padding:0 20px; gap:2px; position:sticky; top:56px; z-index:99; }
+.tab-btn { padding:11px 22px; font-size:.78rem; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:rgba(255,255,255,.6); background:transparent; border:none; border-bottom:3px solid transparent; margin-bottom:-3px; cursor:pointer; transition:all .15s; white-space:nowrap; }
+.tab-btn:hover { color:rgba(255,255,255,.9); }
+.tab-btn.active { color:#fff; border-bottom-color:var(--brand-coral); }
+.tab-btn .tab-icon { margin-right:6px; font-size:.85rem; }
+
+/* ── TAB PANELS ── */
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+/* ── FINANCIALS ── */
+.fin-summary { display:grid; grid-template-columns:repeat(5,1fr); background:var(--brand-blue); border-radius:var(--radius); overflow:hidden; margin-bottom:0; }
+.fin-sum-item { padding:14px 16px; border-right:1px solid rgba(255,255,255,.12); text-align:center; }
+.fin-sum-item:last-child { border-right:none; }
+.fin-sum-val { font-size:1.35rem; font-weight:700; color:#fff; line-height:1; margin-bottom:4px; }
+.fin-sum-lbl { font-size:.62rem; text-transform:uppercase; letter-spacing:.6px; color:rgba(255,255,255,.6); }
+.fin-sum-val.pos { color:#6EE7B7; }
+.fin-sum-val.neg { color:#FCA5A5; }
+
+.qcard { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.qcard-head { padding:10px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.qcard-title { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); }
+.qcard-total { font-size:1.1rem; font-weight:700; color:var(--text); }
+.cat-row { display:flex; align-items:center; gap:8px; padding:5px 14px; border-bottom:1px solid var(--border); }
+.cat-row:last-child { border-bottom:none; }
+.cat-name { font-size:.75rem; color:var(--text); flex:1; }
+.cat-amt { font-size:.75rem; font-weight:600; color:var(--text); white-space:nowrap; }
+.cat-bar-wrap { width:80px; background:var(--surface2); border-radius:3px; height:4px; overflow:hidden; }
+.cat-bar-fill { height:100%; border-radius:3px; }
+
+.gst-table { width:100%; border-collapse:collapse; font-size:.8rem; }
+.gst-table th { padding:8px 14px; text-align:left; font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); border-bottom:2px solid var(--border); background:var(--surface2); }
+.gst-table td { padding:9px 14px; border-bottom:1px solid var(--border); color:var(--text); }
+.gst-table tr:last-child td { border-bottom:none; font-weight:700; background:var(--surface2); }
+.gst-table td.pos { color:var(--red); font-weight:600; }
+.gst-table td.neg { color:var(--green); font-weight:600; }
+
+.exp-bar-row { display:flex; align-items:center; gap:12px; padding:8px 14px; border-bottom:1px solid var(--border); }
+.exp-bar-row:last-child { border-bottom:none; }
+.exp-bar-label { font-size:.78rem; font-weight:600; color:var(--text); width:120px; flex-shrink:0; }
+.exp-bar-track { flex:1; height:12px; background:var(--surface2); border-radius:6px; overflow:hidden; }
+.exp-bar-fill { height:100%; border-radius:6px; }
+.exp-bar-amt { font-size:.78rem; font-weight:700; color:var(--text); width:80px; text-align:right; flex-shrink:0; }
+.exp-bar-gst { font-size:.68rem; color:var(--muted); width:70px; text-align:right; flex-shrink:0; }
+
+@media (max-width:1100px) {
+  .fin-summary { grid-template-columns:repeat(3,1fr); }
+  .fin-sum-item:nth-child(3) { border-right:none; }
+  .fin-sum-item:nth-child(4) { border-top:1px solid rgba(255,255,255,.12); }
+  .fin-sum-item:nth-child(5) { border-top:1px solid rgba(255,255,255,.12); border-right:none; }
+}
+@media (max-width:800px) {
+  .tab-nav { padding:0 10px; overflow-x:auto; }
+  .tab-btn { padding:9px 14px; font-size:.72rem; }
+  .fin-summary { grid-template-columns:1fr 1fr; }
+  .fin-sum-item:nth-child(2) { border-right:none; }
+  .fin-sum-item:nth-child(3),
+  .fin-sum-item:nth-child(4),
+  .fin-sum-item:nth-child(5) { border-top:1px solid rgba(255,255,255,.12); }
+  .fin-sum-item:nth-child(4) { border-right:none; }
+  .fin-sum-item:nth-child(5) { grid-column:span 2; }
+}
 </style>
 </head>
 <body>
+<!-- ── Password Gate Overlay ─────────────────────────────────────────────── -->
+<div id="dash-login" style="display:none;position:fixed;inset:0;z-index:99999;
+  background:var(--brand-blue);align-items:center;justify-content:center;flex-direction:column;">
+  <div style="background:#fff;border-radius:16px;padding:40px 48px;max-width:380px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.3);">
+    <div style="font-size:2rem;margin-bottom:8px;">🏠</div>
+    <h2 style="margin:0 0 4px;color:var(--brand-blue);font-size:1.3rem;">Aaron Müller</h2>
+    <p style="margin:0 0 24px;color:#666;font-size:.9rem;">Realtor Dashboard</p>
+    <input id="dash-pw-input" type="password" placeholder="Password"
+      style="width:100%;box-sizing:border-box;padding:12px 16px;border:2px solid #ddd;border-radius:8px;
+      font-size:1rem;outline:none;margin-bottom:12px;"
+      onkeydown="if(event.key==='Enter')submitPassword()"
+      onfocus="this.style.borderColor='var(--brand-blue)'"
+      onblur="this.style.borderColor='#ddd'">
+    <p id="dash-pw-error" style="display:none;color:#e53;margin:0 0 12px;font-size:.85rem;">Incorrect password — try again.</p>
+    <button onclick="submitPassword()"
+      style="width:100%;padding:12px;background:var(--brand-blue);color:#fff;border:none;
+      border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;">
+      Sign In
+    </button>
+  </div>
+</div>
 
 <!-- MARKET PULSE -->
 <div class="pulse-banner" id="pulseBanner">
@@ -371,11 +492,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
   </div>
   <div class="topbar-right">
     <div class="topbar-date" id="topbarDate"></div>
-    <span class="last-upd" id="lastUpd"></span>
     <button class="refresh-btn" onclick="location.reload()">↻ Refresh</button>
   </div>
 </div>
 
+
+<!-- ── TAB NAVIGATION ── -->
+<div class="tab-nav">
+  <button class="tab-btn active" id="tabBtn-dashboard" onclick="switchTab('dashboard')"><span class="tab-icon">🎯</span>Command Centre</button>
+  <button class="tab-btn" id="tabBtn-sales" onclick="switchTab('sales')"><span class="tab-icon">💼</span>Sales</button>
+  <button class="tab-btn" id="tabBtn-financials" onclick="switchTab('financials')"><span class="tab-icon">💰</span>Financials</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB 1: DASHBOARD -->
+<div class="tab-panel active" id="tab-dashboard">
 <div class="grid">
 
   <!-- STATS BAR -->
@@ -400,98 +530,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
     <div class="card-body card-scroll" id="bodyTodo"><div class="empty">Loading…</div></div>
   </div>
 
-  <!-- ADD TASK MODAL -->
-  <div id="addTaskOverlay" onclick="closeAddTask()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:360px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-      <div style="font-weight:700;font-size:.95rem;color:var(--brand-blue);margin-bottom:16px">Add Task</div>
-      <input id="atText" type="text" placeholder="What needs to be done?" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;color:var(--text);outline:none;margin-bottom:10px" onkeydown="if(event.key==='Enter')saveAddTask()">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-        <select id="atCat" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--text)">
-          <option value="admin">Admin</option>
-          <option value="listing">Listing</option>
-          <option value="prospect">Prospect</option>
-          <option value="urgent">Urgent</option>
-        </select>
-        <input id="atDue" type="date" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--text)">
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted);margin-bottom:16px;cursor:pointer">
-        <input id="atUrgent" type="checkbox" style="width:15px;height:15px;accent-color:var(--brand-coral)"> Mark as high priority ⚡
-      </label>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="closeAddTask()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
-        <button onclick="saveAddTask()" style="padding:8px 18px;border:none;border-radius:8px;background:var(--brand-blue);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Add Task</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- PROSPECTS (wide) -->
-  <div class="card card-wide">
-    <div class="card-header">
-      <div class="card-title"><span class="dot p"></span>Prospects & Follow-Ups</div>
-      <span class="card-count" id="cntProspects">0</span>
-    </div>
-    <div class="card-body card-scroll" id="bodyProspects"><div class="empty">Loading…</div></div>
-  </div>
-
-  <!-- PROSPECT EDIT MODAL -->
-  <div id="prospectOverlay" onclick="closeProspectModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:460px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-      <div style="font-weight:700;font-size:.95rem;color:var(--accent);margin-bottom:4px">✏️ Update Prospect</div>
-      <div id="peModalName" style="font-size:.8rem;color:var(--muted);margin-bottom:18px"></div>
-      <input type="hidden" id="peId">
-
-      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
-        <div>
-          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">NEXT ACTION</label>
-          <input id="peAction" type="text" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div>
-            <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">FOLLOW-UP DATE</label>
-            <input id="peDate" type="date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-          </div>
-          <div>
-            <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">STATUS</label>
-            <select id="peStatus" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box;background:#fff">
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">NOTES</label>
-          <textarea id="peNotes" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.82rem;box-sizing:border-box;resize:vertical;font-family:inherit"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="closeProspectModal()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
-        <button onclick="saveProspect()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ACTIVE LISTINGS (wide) -->
-  <div class="card card-wide">
-    <div class="card-header">
-      <div class="card-title"><span class="dot g"></span>Active Listings</div>
-      <span class="card-count" id="cntListings">0</span>
-    </div>
-    <div class="card-body card-scroll" id="bodyListings"><div class="empty">Loading…</div></div>
-  </div>
-
-  <!-- CALENDAR -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title"><span class="dot"></span>Upcoming Events</div>
-      <span class="card-count" id="cntCal">0</span>
-    </div>
-    <div class="card-body card-scroll" id="bodyCal"><div class="empty">Loading…</div></div>
-  </div>
-
   <!-- LEAD RESPONSE TIMER -->
   <div class="card">
     <div class="card-header">
@@ -501,13 +539,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
     <div class="card-body card-scroll" id="bodyLeads"><div class="empty">Loading…</div></div>
   </div>
 
-  <!-- LEAD AGING QUEUE -->
+  <!-- UPCOMING EVENTS -->
   <div class="card">
     <div class="card-header">
-      <div class="card-title"><span class="dot r" style="background:#B45309"></span>Lead Aging Queue</div>
-      <span class="card-count" id="cntAging">0</span>
+      <div class="card-title"><span class="dot"></span>Upcoming Events</div>
+      <span class="card-count" id="cntCal">0</span>
     </div>
-    <div class="card-body card-scroll" id="bodyAging"><div class="empty">Loading…</div></div>
+    <div class="card-body card-scroll" id="bodyCal"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- PROSPECTS & FOLLOW-UPS (wide) -->
+  <div class="card card-wide">
+    <div class="card-header">
+      <div class="card-title"><span class="dot p"></span>Prospects & Follow-Ups</div>
+      <span class="card-count" id="cntProspects">0</span>
+    </div>
+    <div class="card-body card-scroll" id="bodyProspects"><div class="empty">Loading…</div></div>
   </div>
 
   <!-- CRITICAL DATES -->
@@ -519,23 +566,25 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
     <div class="card-body card-scroll" id="bodyDates"><div class="empty">Loading…</div></div>
   </div>
 
-  <!-- VOLUME TRACKER (full) -->
-  <div class="card card-full">
+  <!-- ACTIVE LISTINGS (wide) -->
+  <div class="card card-wide">
     <div class="card-header">
-      <div class="card-title"><span class="dot t"></span>2026 Volume Tracker</div>
+      <div class="card-title"><span class="dot g"></span>Active Listings</div>
+      <span class="card-count" id="cntListings">0</span>
     </div>
-    <div class="volume-grid" id="bodyVolume"></div>
+    <div class="card-body card-scroll" id="bodyListings"><div class="empty">Loading…</div></div>
   </div>
 
-  <!-- ── SALES TRACKER ── -->
-  <div class="card card-full">
-    <div class="card-header" style="border-left-color:var(--green)">
-      <div class="card-title"><span class="dot g"></span>2026 Sales Tracker</div>
+  <!-- LEAD AGING QUEUE -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot r" style="background:#B45309"></span>Lead Aging Queue</div>
+      <span class="card-count" id="cntAging">0</span>
     </div>
-    <div id="bodySales"><div class="empty">Loading…</div></div>
+    <div class="card-body card-scroll" id="bodyAging"><div class="empty">Loading…</div></div>
   </div>
 
-  <!-- ── COMPETITOR INTEL ── -->
+  <!-- COMPETITOR INTEL (full) -->
   <div class="card card-full" id="panelCompetitors">
     <div class="card-header" style="border-left-color:#E05A2B">
       <div class="card-title"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E05A2B;margin-right:6px"></span>Competitor Intel — South Surrey / White Rock</div>
@@ -545,38 +594,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
     <div id="adsStatus" style="padding:6px 14px 10px;font-size:.7rem;color:var(--muted);display:none"></div>
   </div>
 
-  <!-- ── INTEGRITY TRACKER ── -->
-  <div class="card card-full">
-    <div class="card-header" style="border-left-color:var(--purple)">
-      <div class="card-title"><span class="dot p"></span>Integrity Tracker — Weekly Activity Log</div>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        <button onclick="clearIntegrityOverrides()" id="btnClearOverrides" style="display:none;padding:4px 10px;font-size:.7rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;cursor:pointer">✕ Clear Overrides</button>
-        <button onclick="openIntegrityModal()" style="padding:4px 12px;font-size:.72rem;background:var(--purple);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">✏️ Update Numbers</button>
-      </div>
-    </div>
-    <div id="bodyIntegrity"><div class="empty">Loading…</div></div>
-  </div>
-
-  <!-- INTEGRITY UPDATE MODAL -->
-  <div id="integrityOverlay" onclick="closeIntegrityModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto">
-    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:480px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3);margin-bottom:40px">
-      <div style="font-weight:700;font-size:.95rem;color:var(--purple);margin-bottom:4px">✏️ Update This Week's Numbers</div>
-      <div style="font-size:.72rem;color:var(--muted);margin-bottom:18px">Enter your counts for the current week. Leave blank to keep existing values.</div>
-
-      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--purple);margin-bottom:8px">Appointments</div>
-      <div id="intApptFields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px"></div>
-
-      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:8px">Activities</div>
-      <div id="intActFields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px"></div>
-
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="closeIntegrityModal()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
-        <button onclick="saveIntegrityNumbers()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--purple);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- REPORTS (full) -->
+  <!-- SCHEDULED REPORTS (full) -->
   <div class="card card-full">
     <div class="card-header">
       <div class="card-title"><span class="dot"></span>Scheduled Reports</div>
@@ -593,21 +611,237 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
     <div class="compose-grid" id="bodyCompose"></div>
   </div>
 
+</div><!-- /grid dashboard -->
+</div><!-- /tab-dashboard -->
+
+<!-- ADD TASK MODAL -->
+<div id="addTaskOverlay" onclick="closeAddTask()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:360px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-weight:700;font-size:.95rem;color:var(--brand-blue);margin-bottom:16px">Add Task</div>
+    <input id="atText" type="text" placeholder="What needs to be done?" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;color:var(--text);outline:none;margin-bottom:10px" onkeydown="if(event.key==='Enter')saveAddTask()">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <select id="atCat" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--text)">
+        <option value="admin">Admin</option>
+        <option value="listing">Listing</option>
+        <option value="prospect">Prospect</option>
+        <option value="urgent">Urgent</option>
+      </select>
+      <input id="atDue" type="date" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--text)">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted);margin-bottom:16px;cursor:pointer">
+      <input id="atUrgent" type="checkbox" style="width:15px;height:15px;accent-color:var(--brand-coral)"> Mark as high priority ⚡
+    </label>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeAddTask()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
+      <button onclick="saveAddTask()" style="padding:8px 18px;border:none;border-radius:8px;background:var(--brand-blue);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Add Task</button>
+    </div>
+  </div>
 </div>
+
+<!-- PROSPECT EDIT MODAL -->
+<div id="prospectOverlay" onclick="closeProspectModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:460px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-weight:700;font-size:.95rem;color:var(--accent);margin-bottom:4px">✏️ Update Prospect</div>
+    <div id="peModalName" style="font-size:.8rem;color:var(--muted);margin-bottom:18px"></div>
+    <input type="hidden" id="peId">
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+      <div>
+        <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">NEXT ACTION</label>
+        <input id="peAction" type="text" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">FOLLOW-UP DATE</label>
+          <input id="peDate" type="date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">STATUS</label>
+          <select id="peStatus" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box;background:#fff">
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">NOTES</label>
+        <textarea id="peNotes" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.82rem;box-sizing:border-box;resize:vertical;font-family:inherit" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeProspectModal()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
+      <button onclick="saveProspect()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB 2: SALES -->
+<div class="tab-panel" id="tab-sales">
+<div class="grid">
+
+  <!-- GOALS vs ACTUAL (full) -->
+  <div class="card card-full">
+    <div class="card-header" style="border-left-color:#059669">
+      <div class="card-title"><span class="dot g"></span>2026 Goals vs. Actual</div>
+      <span style="font-size:.68rem;color:var(--muted)">Goal Setting sheet · updated with Sales Tracker</span>
+    </div>
+    <div id="bodyGoalsPanel"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- VOLUME TRACKER (full) -->
+  <div class="card card-full">
+    <div class="card-header">
+      <div class="card-title"><span class="dot t"></span>2026 Volume Tracker</div>
+    </div>
+    <div class="volume-grid" id="bodyVolume"></div>
+  </div>
+
+  <!-- SALES TRACKER (full) -->
+  <div class="card card-full">
+    <div class="card-header" style="border-left-color:var(--green)">
+      <div class="card-title"><span class="dot g"></span>2026 Sales Tracker</div>
+    </div>
+    <div id="bodySales"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- INTEGRITY TRACKER (full) -->
+  <div class="card card-full">
+    <div class="card-header" style="border-left-color:var(--purple)">
+      <div class="card-title"><span class="dot p"></span>Integrity Tracker — Weekly Activity Log</div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <button onclick="clearIntegrityOverrides()" id="btnClearOverrides" style="display:none;padding:4px 10px;font-size:.7rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;cursor:pointer">✕ Clear Overrides</button>
+        <button onclick="openIntegrityModal()" style="padding:4px 12px;font-size:.72rem;background:var(--purple);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">✏️ Update Numbers</button>
+      </div>
+    </div>
+    <div id="bodyIntegrity"><div class="empty">Loading…</div></div>
+  </div>
+
+</div><!-- /grid sales -->
+
+<!-- INTEGRITY UPDATE MODAL -->
+<div id="integrityOverlay" onclick="closeIntegrityModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:480px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3);margin-bottom:40px">
+    <div style="font-weight:700;font-size:.95rem;color:var(--purple);margin-bottom:4px">✏️ Update This Week's Numbers</div>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:18px">Enter your counts for the current week. Leave blank to keep existing values.</div>
+    <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--purple);margin-bottom:8px">Appointments</div>
+    <div id="intApptFields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px"></div>
+    <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:8px">Activities</div>
+    <div id="intActFields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeIntegrityModal()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
+      <button onclick="saveIntegrityNumbers()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--purple);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /tab-sales -->
+
+<!-- ═══════════════════════════════════════════════════════ TAB 3: FINANCIALS -->
+<div class="tab-panel" id="tab-financials">
+<div class="grid" id="finTabContent">
+  <div class="card card-full"><div class="empty">Loading…</div></div>
+</div>
+
+<!-- EXPENSE EDIT MODAL -->
+<div id="finEditOverlay" onclick="closeFinModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;padding:24px;width:480px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3);margin-bottom:40px">
+    <div style="font-weight:700;font-size:.95rem;color:var(--teal);margin-bottom:4px">✏️ Add / Update Expense</div>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:16px">Entries here supplement your Excel data and are saved locally on this device. Update your Excel for the permanent record.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
+      <div>
+        <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">QUARTER</label>
+        <select id="feQuarter" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;background:#fff">
+          <option value="Q1">Q1 · Jan–Mar</option><option value="Q2">Q2 · Apr–Jun</option>
+          <option value="Q3" selected>Q3 · Jul–Sep</option><option value="Q4">Q4 · Oct–Dec</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">CATEGORY</label>
+        <select id="feCategory" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;background:#fff">
+          <option>ADVERTISING</option><option>BROKERAGE</option><option>SUPPLIES</option>
+          <option>GENERAL</option><option>ADMIN</option><option>AUTO EXPENSE</option><option>HOME OFFICE</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">ITEM DESCRIPTION</label>
+        <input id="feItem" type="text" placeholder="e.g. Gas — August" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">AMOUNT ($)</label>
+          <input id="feAmount" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">GST PAID ($)</label>
+          <input id="feGst" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeFinModal()" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:.82rem;cursor:pointer;color:var(--muted)">Cancel</button>
+      <button onclick="saveFinEntry()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--teal);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer">Add Entry</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /tab-financials -->
+
 
 <div class="toast" id="toast"></div>
 
 <script>
+// ── SUPABASE ──
+const SB_URL = 'https://mdaztmdpxmrfplxcdjyn.supabase.co';
+const SB_KEY = 'sb_publishable_1HJ-kGp85rLJt2Ysh5UQxw_VpQRifUU';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+// Helpers that replace the Python server API calls
+async function sbGetLocalTasks() {
+  const { data } = await sb.from('local_tasks').select('*').order('created_at');
+  return (data||[]).map(r=>({id:r.id,text:r.text,category:r.category,dueDate:r.due_date,priority:r.priority,done:r.done}));
+}
+async function sbAddTask(task) {
+  await sb.from('local_tasks').upsert({id:task.id,text:task.text,category:task.category||'admin',due_date:task.dueDate||'',priority:task.priority||'medium',done:false});
+}
+async function sbToggleTask(id, done) {
+  await sb.from('local_tasks').update({done}).eq('id',id);
+}
+async function sbDeleteTasks(ids) {
+  if (!ids.length) return;
+  await sb.from('local_tasks').delete().in('id',ids);
+}
+async function sbSaveAllTasks(tasks) {
+  if (!tasks.length) { await sb.from('local_tasks').delete().neq('id','__none__'); return; }
+  await sb.from('local_tasks').upsert(tasks.map(t=>({id:t.id,text:t.text,category:t.category||'admin',due_date:t.dueDate||'',priority:t.priority||'medium',done:!!t.done})));
+}
+async function sbGetTaskOrder(weekOf) {
+  const { data } = await sb.from('task_order').select('order_ids').eq('week_of',weekOf).maybeSingle();
+  return data ? (data.order_ids||[]) : [];
+}
+async function sbSaveTaskOrder(weekOf, order) {
+  await sb.from('task_order').upsert({week_of:weekOf,order_ids:order,last_updated:new Date().toISOString()});
+}
+async function sbGetDashData(key) {
+  const { data } = await sb.from('dashboard_data').select('value').eq('key',key).maybeSingle();
+  return data ? data.value : null;
+}
+async function sbSaveDashData(key, value) {
+  await sb.from('dashboard_data').upsert({key,value,last_updated:new Date().toISOString()});
+}
+
 // ── UTILS ──
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const today  = new Date(); today.setHours(0,0,0,0);
 const todayStr = fmtDateStr(today);
 
+function parseLocalDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||'').trim());
+  return m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(s);
+}
 function fmtDateStr(d) { return d.toISOString().slice(0,10); }
 function daysUntil(s) {
   if (!s) return null;
-  const d = new Date(s); if (isNaN(d)) return null;
+  const d = parseLocalDate(s); if (isNaN(d)) return null;
   d.setHours(0,0,0,0);
   return Math.round((d - today) / 86400000);
 }
@@ -628,6 +862,13 @@ function fmtTime(iso) {
   const ap = h>=12?'PM':'AM'; h = h%12||12;
   return `${h}:${String(m).padStart(2,'0')} ${ap}`;
 }
+function fmtReceivedDate(iso) {
+  const d = new Date(iso);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h = d.getHours(), m = d.getMinutes();
+  const ap = h>=12?'PM':'AM'; h = h%12||12;
+  return `${months[d.getMonth()]} ${d.getDate()} · ${h}:${String(m).padStart(2,'0')} ${ap}`;
+}
 function minutesAgo(iso) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
 }
@@ -647,62 +888,36 @@ function showToast(msg) {
 }
 
 // ── DATA ──
-// Loads .js data files via dynamic script injection — works with file:// and http://
-// Scheduled tasks write data/*.js files; this dashboard reads them without needing a server.
-let D = { listings:[], prospects:[], calendar:[], leads:[], fubTasks:[], scheduled:[], pulse:{}, goals:{}, closed:[], bizSales:{}, bizIntegrity:{}, weeklyActions:[], competitors:[] };
-
-const DATA_FILES = [
-  { src:'data/listings.js',        global:'DASH_LISTINGS'  },
-  { src:'data/calendar.js',        global:'DASH_CALENDAR'  },
-  { src:'data/scheduled_tasks.js', global:'DASH_TASKS'     },
-  { src:'data/fub_leads.js',       global:'DASH_LEADS'     },
-  { src:'data/fub_tasks.js',       global:'DASH_FUB_TASKS' },
-  { src:'data/market_pulse.js',    global:'DASH_PULSE'     },
-  { src:'data/goals.js',           global:'DASH_GOALS'     },
-  { src:'data/business_plan.js',   global:'DASH_BIZPLAN'   },
-  { src:'data/weekly_actions.js',  global:'DASH_ACTIONS'      },
-  { src:'data/competitors.js',     global:'DASH_COMPETITORS'  },
-];
-
-function loadDataFiles() {
-  return new Promise(resolve => {
-    // Remove old injected scripts
-    document.querySelectorAll('[data-dash]').forEach(el => el.remove());
-    // Clear globals so stale values don't linger if a file fails
-    DATA_FILES.forEach(f => { window[f.global] = undefined; });
-
-    let done = 0;
-    const t = Date.now();
-    DATA_FILES.forEach(f => {
-      const s = document.createElement('script');
-      s.src = f.src + '?t=' + t;
-      s.setAttribute('data-dash', f.global);
-      s.onload = s.onerror = () => { if (++done === DATA_FILES.length) resolve(); };
-      document.head.appendChild(s);
-    });
-  });
-}
+let D = { listings:[], prospects:[], calendar:[], leads:[], fubTasks:[], scheduled:[], pulse:{}, goals:{}, closed:[], bizSales:{}, bizIntegrity:{}, weeklyActions:[], competitors:[], financials:{} };
 
 async function loadAllData() {
-  await loadDataFiles();
+  // Fetch all dashboard data from Supabase in parallel
+  const keys = ['listings','calendar','scheduled_tasks','fub_leads','fub_tasks',
+                 'market_pulse','goals','business_plan','weekly_actions',
+                 'competitors','financials'];
+  const [dataRows, localTaskRows] = await Promise.all([
+    sb.from('dashboard_data').select('key,value').in('key', keys),
+    sbGetLocalTasks()
+  ]);
 
-  // On Vercel (not local file://), fetch live lead data directly from FUB API
-  if (location.protocol !== 'file:') {
-    try {
-      const r = await fetch('/api/leads');
-      if (r.ok) window.DASH_LEADS = await r.json();
-    } catch(e) { /* fall back to static data/fub_leads.js */ }
-  }
+  const blob = {};
+  (dataRows.data||[]).forEach(r => { blob[r.key] = r.value; });
 
-  const ld    = window.DASH_LISTINGS  || {};
-  const cal   = window.DASH_CALENDAR  || {};
-  const tasks = window.DASH_TASKS     || {};
-  const fub   = window.DASH_LEADS     || {};
-  const fubT  = window.DASH_FUB_TASKS || {};
-  const pulse = window.DASH_PULSE     || {};
-  const goals = window.DASH_GOALS     || {};
+  const ld    = blob['listings']        || {};
+  const cal   = blob['calendar']        || {};
+  const tasks = blob['scheduled_tasks'] || {};
+  const fub   = blob['fub_leads']       || {};
+  const fubT  = blob['fub_tasks']       || {};
+  const pulse = blob['market_pulse']    || {};
+  const goals = blob['goals']           || {};
+  const biz   = blob['business_plan']   || {};
 
-  const biz   = window.DASH_BIZPLAN || {};
+  // Set globals for any code that still reads window.DASH_*
+  window.DASH_FINANCIALS   = blob['financials']     || {};
+  window.DASH_GOALS        = goals;
+  window.DASH_LEADS        = fub;
+  window.DASH_BIZPLAN      = biz;
+  window.DASH_LOCAL_TASKS  = { tasks: localTaskRows };
 
   D.listings     = ld.listings        || [];
   D.prospects    = ld.prospects       || [];
@@ -715,19 +930,18 @@ async function loadAllData() {
   D.closed       = goals.closedDeals  || [];
   D.bizSales     = biz.sales          || {};
   D.bizIntegrity = biz.integrity      || {};
-  D.competitors   = (window.DASH_COMPETITORS || {}).competitors || [];
-  D.weeklyActions = (window.DASH_ACTIONS || {}).tasks || [];
-  D.weeklyActionsWeekOf = (window.DASH_ACTIONS || {}).weekOf || '';
-  D.weeklyActionsSource = (window.DASH_ACTIONS || {}).source || 'manual';
+  D.competitors   = (blob['competitors']  || {}).competitors  || [];
+  D.weeklyActions = (blob['weekly_actions'] || {}).tasks      || [];
+  D.weeklyActionsWeekOf = (blob['weekly_actions'] || {}).weekOf  || '';
+  D.weeklyActionsSource = (blob['weekly_actions'] || {}).source  || 'manual';
 
   buildPulse(); buildStats(); buildListings(); buildCalendar();
   buildLeads(); buildAgingQueue(); buildCriticalDates(); initTodoStorage(); buildTodo();
   buildProspects(); buildVolume(); buildCompose(); buildReports();
   buildSalesTracker(); buildIntegrityTracker(); buildWeeklyActions(); buildCompetitors();
+  buildFinancials();
+  buildGoalsPanel();
   updateClearOverridesBtn();
-
-  document.getElementById('lastUpd').textContent =
-    'Updated ' + new Date().toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'});
 }
 
 // ── MARKET PULSE ──
@@ -763,7 +977,7 @@ function buildStats() {
   const prospects = D.prospects.filter(p=>p.status==='Active').length;
   let week=0;
   D.listings.forEach(l=>{
-    ['offerReviewDate','openHouseDate','completionDate','conditionalDate'].forEach(k=>{
+    ['offerReviewDate','openHouseDate','completionDate','conditionalDate','possessionDate'].forEach(k=>{
       const n=daysUntil(l[k]); if(n!=null&&n>=0&&n<=7)week++;
     });
   });
@@ -796,6 +1010,7 @@ function buildListings() {
     if(l.openHouseDate)    dates.push(`<span class="date-pill dp-open">🚪 OH: ${l.openHouseDate}${l.openHouseTime?' @ '+l.openHouseTime:''}</span>`);
     if(l.conditionalDate)  dates.push(`<span class="date-pill dp-cond">⚠️ Conditions: ${l.conditionalDate} (${relDate(l.conditionalDate)})</span>`);
     if(l.completionDate)   dates.push(`<span class="date-pill dp-comp">🏁 Completion: ${l.completionDate} (${relDate(l.completionDate)})</span>`);
+    if(l.possessionDate)   dates.push(`<span class="date-pill dp-comp">🔑 Possession: ${l.possessionDate} (${relDate(l.possessionDate)})</span>`);
     return `<div class="listing-row">
       <div>
         <div class="listing-address">${l.address}</div>
@@ -854,16 +1069,17 @@ function buildLeads() {
       : fmtElapsed(min);
     const callBtn  = l.phone  ? `<a class="lead-act-btn lab-call"  href="tel:${l.phone.replace(/\D/g,'')}">📞 Call</a>` : '';
     const emailBtn = l.email  ? `<a class="lead-act-btn lab-email" href="mailto:${l.email}">✉ Email</a>` : '';
+    const budgetStr = l.budget && Number(l.budget) > 1 ? ` · $${Number(l.budget).toLocaleString()}` : '';
     return `<div class="lead-row">
       <div>
         <div class="lead-name">${l.name}</div>
-        <div class="lead-source">${l.source||'CINC'} · ${l.stage||'New'}${l.budget?' · '+l.budget:''}</div>
+        <div class="lead-source">${l.source||'CINC'} · ${l.stage||'New'}${budgetStr}</div>
         ${l.phone||l.email ? `<div style="font-size:.7rem;color:var(--muted);margin-bottom:2px">${[l.phone,l.email].filter(Boolean).join(' · ')}</div>` : ''}
         ${l.notes?`<div style="font-size:.7rem;color:var(--muted)">${l.notes}</div>`:''}
       </div>
       <div>
         <div class="lead-timer ${timerCls}">${elapsed}</div>
-        <div class="lead-stage">since received</div>
+        <div class="lead-stage">${fmtReceivedDate(l.receivedAt)}</div>
         <div class="lead-actions">${callBtn}${emailBtn}</div>
       </div>
     </div>`;
@@ -884,38 +1100,87 @@ function initTodoStorage() {
   _weekKey = 'todo-checks-' + wk;
   _localTasksKey = 'local-tasks-' + wk;
   checks = JSON.parse(localStorage.getItem(_weekKey)||'{}');
-  localTasks = JSON.parse(localStorage.getItem(_localTasksKey)||'[]');
 
-  // Every Sunday: remove completed tasks, carry forward incomplete ones
+  // Server is authoritative — always use server task list
+  const serverTasks = (window.DASH_LOCAL_TASKS || {}).tasks || [];
+  localTasks = [...serverTasks];
+
+  // Sync completion status from server
+  serverTasks.forEach(t => {
+    if (t.done) checks[t.id] = true;
+    else if (checks[t.id] === undefined) checks[t.id] = false;
+  });
+  saveTodos();
+
+  // Merge server task order into local order
+  const _orderKeyNow = 'task-order-' + wk;
+  const existingOrder = JSON.parse(localStorage.getItem(_orderKeyNow)||'[]');
+  const newFromServer = serverTasks.filter(t => !existingOrder.includes(t.id)).map(t => t.id);
+  if (newFromServer.length) {
+    localStorage.setItem(_orderKeyNow, JSON.stringify([...newFromServer, ...existingOrder]));
+  }
+  // Pull task order from Supabase
+  sbGetTaskOrder(wk).then(serverOrder => {
+    if (!serverOrder.length) return;
+    const localOrder = JSON.parse(localStorage.getItem(_orderKeyNow)||'[]');
+    const serverSet  = new Set(serverOrder);
+    const merged = [...serverOrder, ...localOrder.filter(id => !serverSet.has(id))];
+    if (JSON.stringify(merged) !== JSON.stringify(localOrder)) {
+      localStorage.setItem(_orderKeyNow, JSON.stringify(merged));
+      buildTodo();
+    }
+  }).catch(() => {});
+
+  // Every Sunday (or Monday catch-up): remove completed tasks, carry forward incomplete ones
   const now = new Date();
-  const sundayKey = 'cleared-' + now.toISOString().slice(0,10);
-  if (now.getDay() === 0 && !localStorage.getItem(sundayKey)) {
+  // Use LOCAL date string to avoid UTC timezone mismatches
+  const localDateStr = now.getFullYear() + '-' +
+    String(now.getMonth()+1).padStart(2,'0') + '-' +
+    String(now.getDate()).padStart(2,'0');
+  const sundayKey = 'cleared-' + localDateStr;
+  // Find the most recent Sunday's date string (for Monday catch-up)
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon
+  const lastSundayDate = new Date(now);
+  lastSundayDate.setDate(now.getDate() - (dayOfWeek === 0 ? 0 : dayOfWeek));
+  const lastSundayStr = lastSundayDate.getFullYear() + '-' +
+    String(lastSundayDate.getMonth()+1).padStart(2,'0') + '-' +
+    String(lastSundayDate.getDate()).padStart(2,'0');
+  const missedSundayKey = 'cleared-' + lastSundayStr;
+  const isSunday = dayOfWeek === 0;
+  const isMonday = dayOfWeek === 1;
+  const shouldClear = (isSunday && !localStorage.getItem(sundayKey)) ||
+                      (isMonday && !localStorage.getItem(missedSundayKey)); // catch missed Sunday
+  if (shouldClear) {
+    const clearKey = isSunday ? sundayKey : missedSundayKey;
     const doneIds = new Set(Object.keys(checks).filter(k => checks[k]));
 
-    // ── Snapshot BEFORE clearing ───────────────────────────────────────────
-    saveWeeklyArchive(wk);
+    // ── Archive FIRST, wait for confirmation, THEN clear ──────────────────
+    saveWeeklyArchive(wk, () => {
+      sbDeleteTasks([...doneIds]).catch(()=>{});
 
-    // Hide completed wa-* tasks (they come from data file, can't be filtered like localTasks)
-    const hiddenWaIds = [...doneIds].filter(id => id.startsWith('wa-'));
-    if (hiddenWaIds.length) {
-      localStorage.setItem('hidden-wa-' + wk, JSON.stringify(hiddenWaIds));
-    }
+      // Hide completed wa-* tasks (they come from data file, can't be filtered like localTasks)
+      const hiddenWaIds = [...doneIds].filter(id => id.startsWith('wa-'));
+      if (hiddenWaIds.length) {
+        localStorage.setItem('hidden-wa-' + wk, JSON.stringify(hiddenWaIds));
+      }
 
-    localTasks = localTasks.filter(t => !doneIds.has(t.id));
-    doneIds.forEach(k => delete checks[k]);
-    // Also remove completed IDs from task order so uncompleted tasks rise to top
-    const orderKey = 'task-order-' + (D.weeklyActionsWeekOf||'week');
-    const savedOrder = JSON.parse(localStorage.getItem(orderKey)||'[]');
-    localStorage.setItem(orderKey, JSON.stringify(savedOrder.filter(id => !doneIds.has(id))));
-    saveTodos();
-    saveLocalTasks();
-    localStorage.setItem(sundayKey, '1');
+      localTasks = localTasks.filter(t => !doneIds.has(t.id));
+      doneIds.forEach(k => delete checks[k]);
+      // Also remove completed IDs from task order so uncompleted tasks rise to top
+      const orderKey = 'task-order-' + (D.weeklyActionsWeekOf||'week');
+      const savedOrder = JSON.parse(localStorage.getItem(orderKey)||'[]');
+      localStorage.setItem(orderKey, JSON.stringify(savedOrder.filter(id => !doneIds.has(id))));
+      saveTodos();
+      saveLocalTasks();
+      localStorage.setItem(clearKey, '1');
+      buildTodo(); // re-render immediately after clearing
+    });
   }
 }
 function saveTodos() { localStorage.setItem(_weekKey, JSON.stringify(checks)); }
 function saveLocalTasks() { localStorage.setItem(_localTasksKey, JSON.stringify(localTasks)); }
 
-function saveWeeklyArchive(weekOf) {
+function saveWeeklyArchive(weekOf, onSuccess) {
   // Build full task list with completion status (wa-* tasks + manual tasks)
   const allTasks = [];
   D.weeklyActions.forEach(t => {
@@ -924,12 +1189,10 @@ function saveWeeklyArchive(weekOf) {
   localTasks.forEach(t => {
     allTasks.push({ text: t.text, done: !!checks[t.id] });
   });
-  if (!allTasks.length) return;
-  fetch('http://localhost:5678/api/save-weekly-archive', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ weekOf, tasks: allTasks })
-  }).catch(() => {}); // silent fail — archive is a bonus, not critical
+  if (!allTasks.length) { if (onSuccess) onSuccess(); return; }
+  sbSaveDashData('archive_' + weekOf, { weekOf, tasks: allTasks, archivedAt: new Date().toISOString() })
+    .then(() => { if (onSuccess) onSuccess(); })
+    .catch(() => { if (onSuccess) onSuccess(); });
 }
 
 function openAddTask() {
@@ -957,15 +1220,20 @@ function saveAddTask() {
   };
   localTasks.unshift(task);      // add to top of local list
   saveLocalTasks();
-  taskOrder.unshift(task.id);    // prepend to order so it sorts first
+  taskOrder.unshift(task.id);
   saveTaskOrder();
+  sbAddTask(task).catch(()=>{});
   closeAddTask();
   buildTodo();
 }
 // ── TASK ORDER ──
 let _orderKey = 'task-order-week';
 let taskOrder = [];
-function saveTaskOrder(){ localStorage.setItem(_orderKey, JSON.stringify(taskOrder)); }
+function saveTaskOrder() {
+  localStorage.setItem(_orderKey, JSON.stringify(taskOrder));
+  const weekOf = D.weeklyActionsWeekOf || 'week';
+  sbSaveTaskOrder(weekOf, taskOrder).catch(() => {});
+}
 
 function buildTodo() {
   const el = document.getElementById('bodyTodo');
@@ -993,7 +1261,7 @@ function buildTodo() {
   D.listings.forEach(l=>{
     [['offerReviewDate','Offer review','listing'],['openHouseDate','Open house','listing'],
      ['conditionalDate','Conditions remove','urgent'],['completionDate','Completion','urgent'],
-     ['photoSessionDate','Photo session','listing'],['stagingDate','Staging','listing']].forEach(([k,lbl,tag])=>{
+     ['possessionDate','Possession','urgent'],['photoSessionDate','Photo session','listing'],['stagingDate','Staging','listing']].forEach(([k,lbl,tag])=>{
       const n=daysUntil(l[k]);
       if(n!=null&&n>=0&&n<=1)
         todos.push({id:`${l.id}-${k}`,text:`${l.address}: ${lbl} ${n===0?'TODAY':'tomorrow'}`,tag,urgent:n===0});
@@ -1001,8 +1269,12 @@ function buildTodo() {
   });
   D.calendar.forEach(e=>{
     const d=new Date(e.start); d.setHours(0,0,0,0);
-    if(d.getTime()===today.getTime())
-      todos.push({id:'cal-'+e.id,text:`${fmtTime(e.start)} — ${e.title}`,tag:'admin',urgent:false});
+    const daysOut=Math.round((d.getTime()-today.getTime())/86400000);
+    if(daysOut>=0&&daysOut<=6){
+      const DAY=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const dayLabel=daysOut===0?'Today':DAY[d.getDay()];
+      todos.push({id:'cal-'+e.id,text:`${dayLabel} ${fmtTime(e.start)} — ${e.title}`,tag:'calendar',urgent:false,_sort:new Date(e.start).getTime()});
+    }
   });
   D.leads.forEach(l=>{
     const min=minutesAgo(l.receivedAt);
@@ -1022,19 +1294,43 @@ function buildTodo() {
     ];
   }
 
-  // Apply saved order — known IDs first, new ones appended at end
+  // Any calendar event, lead, FUB task, or prospect action that isn't already
+  // in taskOrder should jump to the TOP (not the bottom) so nothing gets missed.
+  // wa-* (weekly action items) and lt-* (manual user tasks) stay at their saved position.
+  const AUTO_PREFIXES = ['cal-', 'lead-', 'fubt-', 'pr-'];
+  const isAuto = id => AUTO_PREFIXES.some(p => id.startsWith(p));
+  const newAutoIds = todos
+    .map(t => t.id)
+    .filter(id => isAuto(id) && !taskOrder.includes(id));
+  if (newAutoIds.length) {
+    taskOrder = [...newAutoIds, ...taskOrder];
+    saveTaskOrder(); // persist so they stay at top across refreshes
+  }
+
+  // Sort order: manual lt- tasks first (newest at top), then calendar events
+  // (sorted by start time), then everything else sorted by saved taskOrder.
+  const ltTodos   = todos.filter(t=>t.id.startsWith('lt-'));
+  const calTodos  = todos.filter(t=>t.id.startsWith('cal-')).sort((a,b)=>(a._sort||0)-(b._sort||0));
+  const restTodos = todos.filter(t=>!t.id.startsWith('lt-')&&!t.id.startsWith('cal-'));
   const orderMap = {};
   taskOrder.forEach((id,i)=>{ orderMap[id]=i; });
-  todos.sort((a,b)=>{
+  ltTodos.sort((a,b)=>{
     const ai = orderMap[a.id] ?? 9999;
     const bi = orderMap[b.id] ?? 9999;
     return ai - bi;
   });
+  restTodos.sort((a,b)=>{
+    const ai = orderMap[a.id] ?? 9999;
+    const bi = orderMap[b.id] ?? 9999;
+    return ai - bi;
+  });
+  todos = [...ltTodos, ...calTodos, ...restTodos];
 
   document.getElementById('cntTodo').textContent = todos.length;
   el.innerHTML = todos.map(t=>{
     const done = checks[t.id] || t.done;
-    const del = t.local ? `<span onclick="deleteLocalTask('${t.id}')" style="margin-left:4px;color:var(--muted);cursor:pointer;font-size:.72rem;opacity:.5" title="Remove">✕</span>` : '';
+    const editBtn = (t.local&&!done) ? `<span onclick="editLocalTask('${t.id}')" style="margin-left:4px;color:var(--muted);cursor:pointer;font-size:.8rem;opacity:.45" title="Edit">✎</span>` : '';
+    const del = t.local ? `<span onclick="deleteLocalTask('${t.id}')" style="margin-left:2px;color:var(--muted);cursor:pointer;font-size:.72rem;opacity:.45" title="Remove">✕</span>` : '';
     return `<div class="todo-row" draggable="true" data-id="${t.id}"
       ondragstart="todoDragStart(event)"
       ondragover="todoDragOver(event)"
@@ -1046,8 +1342,8 @@ function buildTodo() {
       style="cursor:default">
       <span class="drag-handle" title="Drag to reorder">⠿</span>
       <div class="todo-cb ${done?'done':''}" onclick="toggleTodo('${t.id}',this)"></div>
-      <div class="todo-txt ${done?'done':''}" id="tt-${t.id}">${t.text}${t.dueDate&&!done?` <span style="font-size:.65rem;color:var(--muted)">· due ${t.dueDate}</span>`:''}${t.urgent&&!done?' ⚡':''}</div>
-      <span class="ttag ${t.tag}">${t.tag}</span>${del}
+      <div class="todo-txt ${done?'done':''}" id="tt-${t.id}"${t.local&&!done?' ondblclick="editLocalTask(\''+t.id+'\')" title="Double-click to edit" style="cursor:text"':''}>${t.text}${t.dueDate&&!done?` <span style="font-size:.65rem;color:var(--muted)">· due ${t.dueDate}</span>`:''}${t.urgent&&!done?' ⚡':''}</div>
+      <span class="ttag ${t.tag}">${t.tag}</span>${editBtn}${del}
     </div>`;
   }).join('');
 }
@@ -1123,10 +1419,83 @@ function toggleTodo(id,el){
   checks[id]=!checks[id]; saveTodos();
   el.classList.toggle('done');
   document.getElementById('tt-'+id)?.classList.toggle('done');
+  if (id.startsWith('lt-')) {
+    sbToggleTask(id, !!checks[id]).catch(()=>{});
+  }
 }
+// ── AUTO-SYNC: poll Supabase every 30s for task changes from other devices ──
+async function syncTasksFromServer() {
+  try {
+    const serverTasks = await sbGetLocalTasks();
+    if (!serverTasks.length && !localTasks.some(t => t.id.startsWith('lt-'))) return;
+
+    const currentMap = {};
+    localTasks.forEach(t => { currentMap[t.id] = t.done; });
+    const serverMap  = {};
+    serverTasks.forEach(t => { serverMap[t.id]  = t.done; });
+
+    const changed =
+      serverTasks.some(t => !(t.id in currentMap)) ||
+      localTasks.filter(t=>t.id.startsWith('lt-')).some(t => !(t.id in serverMap)) ||
+      serverTasks.some(t => serverMap[t.id] !== currentMap[t.id]);
+
+    if (!changed) return;
+
+    localTasks = [...serverTasks];
+    saveLocalTasks();
+    serverTasks.forEach(t => { checks[t.id] = !!t.done; });
+    saveTodos();
+
+    const orderKey = 'task-order-' + (D.weeklyActionsWeekOf||'week');
+    const order = JSON.parse(localStorage.getItem(orderKey)||'[]');
+    const newIds = serverTasks.filter(t => !order.includes(t.id)).map(t => t.id);
+    if (newIds.length) localStorage.setItem(orderKey, JSON.stringify([...newIds, ...order]));
+
+    try {
+      const serverOrder = await sbGetTaskOrder(D.weeklyActionsWeekOf||'week');
+      if (serverOrder.length) {
+        const localOrder = JSON.parse(localStorage.getItem(orderKey)||'[]');
+        const localSet   = new Set(localOrder);
+        const merged = [...localOrder, ...serverOrder.filter(id => !localSet.has(id))];
+        if (JSON.stringify(merged) !== JSON.stringify(localOrder)) {
+          localStorage.setItem(orderKey, JSON.stringify(merged));
+        }
+      }
+    } catch(_) {}
+
+    buildTodo();
+  } catch(e) { /* silent */ }
+}
+setInterval(syncTasksFromServer, 30000);
+
 function deleteLocalTask(id){
   localTasks = localTasks.filter(t=>t.id!==id);
   saveLocalTasks();
+  sbDeleteTasks([id]).catch(()=>{});
+  buildTodo();
+}
+
+function editLocalTask(id){
+  const el = document.getElementById('tt-'+id);
+  if(!el || el.querySelector('input')) return;
+  const task = localTasks.find(t=>t.id===id);
+  if(!task) return;
+  el.innerHTML = `<input id="ei-${id}" value="${task.text.replace(/"/g,'&quot;')}"
+    style="width:92%;border:none;border-bottom:1px solid var(--brand-coral);background:transparent;color:var(--fg);font-size:inherit;outline:none;padding:0;"
+    onkeydown="if(event.key==='Enter'){saveEditTask('${id}',this.value);event.preventDefault()}else if(event.key==='Escape'){buildTodo()}"
+    onblur="saveEditTask('${id}',this.value)">`;
+  const inp = document.getElementById('ei-'+id);
+  inp.focus(); inp.select();
+}
+
+function saveEditTask(id, newText){
+  const text = newText.trim();
+  if(!text){buildTodo();return;}
+  const task = localTasks.find(t=>t.id===id);
+  if(!task || task.text===text){buildTodo();return;}
+  task.text = text;
+  saveLocalTasks();
+  sbSaveAllTasks(localTasks).catch(()=>{});
   buildTodo();
 }
 
@@ -1181,25 +1550,20 @@ function saveProspect() {
     status:         document.getElementById('peStatus').value,
     notes:          document.getElementById('peNotes').value.trim(),
   };
-  fetch('http://localhost:5678/api/update-prospect', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, fields })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.ok) {
-      // Update in-memory so the card refreshes immediately without a reload
-      const p = D.prospects.find(x => x.id === id);
-      if (p) Object.assign(p, fields);
-      closeProspectModal();
-      buildProspects();
-      buildStats();
-    } else {
-      alert('Save failed: ' + (data.error || 'unknown error'));
-    }
-  })
-  .catch(() => alert('Could not reach the dashboard server. Make sure it is running.'));
+  // Update in-memory
+  const p = D.prospects.find(x => x.id === id);
+  if (p) Object.assign(p, fields);
+  // Save updated listings blob back to Supabase
+  sbGetDashData('listings').then(blob => {
+    const updated = blob || {};
+    updated.prospects = D.prospects;
+    updated.lastUpdated = new Date().toISOString();
+    return sbSaveDashData('listings', updated);
+  }).then(() => {
+    closeProspectModal();
+    buildProspects();
+    buildStats();
+  }).catch(() => alert('Save failed — check your internet connection.'));
 }
 
 // ── VOLUME TRACKER ──
@@ -1332,11 +1696,18 @@ function buildReports() {
   if (!tasks.length) { el.innerHTML='<div class="empty">No scheduled tasks</div>'; return; }
   const colors = ['b','g','a'];
 
+  // Hard-coded report patterns so buttons always appear even if data file is overwritten
+  const REPORT_PATTERNS = {
+    'canada-real-estate-news-report': 'real-estate-report-',
+    'friday-fraser-valley-shortlist': 'fraser-valley-shortlist-',
+  };
+
   // Render cards immediately, then resolve "Latest Report" links async for report tasks
   el.innerHTML = tasks.map((t,i)=>{
     const c = colors[i]||'b';
-    const reportBtn = t.reportPattern
-      ? `<button id="rlink-${t.id}" class="rlink ${c}" onclick="openLatestReport('${t.reportPattern}','${t.id}')" style="cursor:pointer">📄 Latest Report</button>`
+    const pattern = t.reportPattern || REPORT_PATTERNS[t.id];
+    const reportBtn = pattern
+      ? `<button id="rlink-${t.id}" class="rlink ${c}" onclick="openLatestReport('${pattern}','${t.id}')" style="cursor:pointer">📄 Open Latest Report</button>`
       : '';
     return `<div class="report-card">
       <div class="report-label">${t.label}</div>
@@ -1349,16 +1720,16 @@ function buildReports() {
 }
 
 function openLatestReport(prefix, taskId) {
-  fetch(`http://localhost:5678/api/latest-report?prefix=${encodeURIComponent(prefix)}`)
-    .then(r => r.json())
+  // Reports are stored in Supabase under dashboard_data key 'report_<prefix>'
+  sbGetDashData('report_' + prefix)
     .then(data => {
-      if (data.url) {
-        window.open(`http://localhost:5678${data.url}`, '_blank');
+      if (data && data.url) {
+        window.open(data.url, '_blank');
       } else {
         alert('No report found yet for this task.');
       }
     })
-    .catch(() => alert('Could not reach the dashboard server. Make sure it is running.\n\nRestart it by running: python3 ~/Desktop/Claude/Dashboard/server.py'));
+    .catch(() => alert('Could not load report.'));
 }
 
 // ── CLOCK ──
@@ -1539,10 +1910,13 @@ function buildAgingQueue() {
     const rows = grouped[b].map(l => {
       const days = l.hrs >= 24 ? `${Math.floor(l.hrs/24)}d` : `${l.hrs}h`;
       const name = l.name || l.email || 'Unknown';
+      const receivedLabel = l.receivedAt ? fmtReceivedDate(l.receivedAt) : '';
+      const budgetAging = l.budget && Number(l.budget) > 1 ? ` · $${Number(l.budget).toLocaleString()}` : '';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
         <div>
           <div style="font-size:.78rem;font-weight:600;color:var(--text)">${name}</div>
-          <div style="font-size:.66rem;color:var(--muted)">${l.source||'Unknown source'} · ${l.stage||''}</div>
+          <div style="font-size:.66rem;color:var(--muted)">${l.source||'Unknown source'} · ${l.stage||''}${budgetAging}</div>
+          ${receivedLabel ? `<div style="font-size:.63rem;color:var(--muted);opacity:.75">Received: ${receivedLabel}</div>` : ''}
         </div>
         <span style="font-size:.68rem;font-weight:700;color:${color};white-space:nowrap;margin-left:8px">${days}</span>
       </div>`;
@@ -1566,11 +1940,12 @@ function buildCriticalDates() {
   (D.listings || []).forEach(l => {
     const add = (label, dateStr, type) => {
       if (!dateStr) return;
-      const d = new Date(dateStr); d.setHours(0,0,0,0);
+      const d = parseLocalDate(dateStr); d.setHours(0,0,0,0);
       const diff = Math.round((d - today) / 86400000);
       if (diff >= -1) events.push({ label, date: d, diff, address: l.address, type });
     };
     add('Completion', l.completionDate, 'completion');
+    add('Possession', l.possessionDate, 'possession');
     add('Subject Removal', l.conditionalDate, 'conditional');
     add('Offer Review', l.offerReviewDate, 'offer');
     add('Open House', l.openHouseDate, 'openhouse');
@@ -1593,8 +1968,8 @@ function buildCriticalDates() {
 
   if (!events.length) { el.innerHTML='<div class="empty">No upcoming critical dates</div>'; return; }
 
-  const typeColor = { completion:'#7C3AED', conditional:'#DC2626', offer:'#D97706', openhouse:'#2563EB', photo:'#0891B2', staging:'#059669', calendar:'#6B7280' };
-  const typeLabel = { completion:'Completion', conditional:'Subjects Due', offer:'Offer Review', openhouse:'Open House', photo:'Photos', staging:'Staging', calendar:'Calendar' };
+  const typeColor = { completion:'#7C3AED', possession:'#7C3AED', conditional:'#DC2626', offer:'#D97706', openhouse:'#2563EB', photo:'#0891B2', staging:'#059669', calendar:'#6B7280' };
+  const typeLabel = { completion:'Completion', possession:'Possession', conditional:'Subjects Due', offer:'Offer Review', openhouse:'Open House', photo:'Photos', staging:'Staging', calendar:'Calendar' };
 
   el.innerHTML = events.map(ev => {
     const color = typeColor[ev.type] || '#6B7280';
@@ -1849,6 +2224,384 @@ function updateClearOverridesBtn() {
   try { saved = JSON.parse(localStorage.getItem(getIntegrityKey()) || '{}'); } catch(e){}
   btn.style.display = Object.keys(saved).length > 0 ? 'inline-block' : 'none';
 }
+
+// ── TAB SWITCHING ──
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('tabBtn-' + name).classList.add('active');
+  localStorage.setItem('activeTab', name);
+}
+(function(){
+  const saved = localStorage.getItem('activeTab');
+  if (saved && document.getElementById('tab-' + saved)) switchTab(saved);
+})();
+
+// ── FINANCIALS (rebuilt) ──────────────────────────────────────────────────
+const CAT_COLORS = {
+  'ADVERTISING':  '#3B82F6',
+  'BROKERAGE':    '#10B981',
+  'SUPPLIES':     '#F59E0B',
+  'GENERAL':      '#8B5CF6',
+  'ADMIN':        '#EC4899',
+  'AUTO EXPENSE': '#EF4444',
+  'HOME OFFICE':  '#6B7280',
+};
+const CAT_ORDER = ['ADVERTISING','BROKERAGE','SUPPLIES','GENERAL','ADMIN','AUTO EXPENSE','HOME OFFICE'];
+const CAT_ICONS = {'ADVERTISING':'📣','BROKERAGE':'🏢','SUPPLIES':'📦','GENERAL':'📋','ADMIN':'🏦','AUTO EXPENSE':'🚗','HOME OFFICE':'🏠'};
+const FIN_OVERRIDE_KEY = 'fin-overrides-2026';
+const LEADGEN_NAMES = new Set(['lead gen (fb)','lead gen (rew)','advertising / promo(cinc)']);
+const QCOLORS = {Q1:'#3B82F6',Q2:'#10B981',Q3:'#F59E0B',Q4:'#EF4444'};
+
+function getFinOverrides(){try{return JSON.parse(localStorage.getItem(FIN_OVERRIDE_KEY)||'[]');}catch(e){return [];}}
+function fmtMoney(n){if(!n)return '$0';return '$'+Math.round(n).toLocaleString('en-CA');}
+function fmtMoneyDec(n){if(!n)return '$0.00';return '$'+n.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+function buildFinancials() {
+  const raw = window.DASH_FINANCIALS;
+  const el = document.getElementById('finTabContent');
+  if (!raw || !raw.quarters) {
+    el.innerHTML = '<div class="card card-full"><div class="empty">No financial data — ensure data/financials.js is present.</div></div>';
+    return;
+  }
+
+  // Clone and merge local overrides
+  const fin = JSON.parse(JSON.stringify(raw));
+  getFinOverrides().forEach(e => {
+    const q = fin.quarters[e.quarter];
+    if (!q || !q.categories[e.category]) return;
+    q.categories[e.category].items.push({name:e.item,amount:e.amount,gst:e.gst,_manual:true});
+    q.categories[e.category].total += e.amount;
+    q.categories[e.category].gst   += e.gst;
+    q.totalExpenses += e.amount;
+    q.totalGstPaid  += e.gst;
+  });
+
+  // Recompute YTD and gstPayable per quarter
+  fin.ytd = {totalExpenses:0,totalGstPaid:0,gciPaid:0,gstCollected:0,gstPayable:0};
+  ['Q1','Q2','Q3','Q4'].forEach(q => {
+    const qd = fin.quarters[q];
+    qd.gstPayable = qd.gstCollected - qd.totalGstPaid;
+    fin.ytd.totalExpenses += qd.totalExpenses;
+    fin.ytd.totalGstPaid  += qd.totalGstPaid;
+    fin.ytd.gciPaid       += qd.gciPaid;
+    fin.ytd.gstCollected  += qd.gstCollected;
+    fin.ytd.gstPayable    += qd.gstPayable;
+  });
+
+  // Compute breakouts
+  const brk = {dividends:{amount:0,gst:0,byQ:{}},meals:{amount:0,gst:0,byQ:{}},gifts:{amount:0,gst:0,byQ:{}},leadgen:{amount:0,gst:0,byQ:{}}};
+  ['Q1','Q2','Q3','Q4'].forEach(q => {
+    Object.keys(brk).forEach(k => brk[k].byQ[q] = 0);
+    const cats = fin.quarters[q].categories;
+    (cats.ADMIN?.items||[]).forEach(it => {
+      if (it.name.toLowerCase().includes('dividend')) {
+        brk.dividends.amount += it.amount; brk.dividends.gst += it.gst; brk.dividends.byQ[q] += it.amount;
+      }
+    });
+    (cats.GENERAL?.items||[]).forEach(it => {
+      const n = it.name.toLowerCase();
+      if (n.includes('meal')||n.includes('spirit')||n.includes('entertainment')) {
+        brk.meals.amount += it.amount; brk.meals.gst += it.gst; brk.meals.byQ[q] += it.amount;
+      }
+      if (n.includes('gift')) { brk.gifts.amount += it.amount; brk.gifts.gst += it.gst; brk.gifts.byQ[q] += it.amount; }
+    });
+    (cats.ADVERTISING?.items||[]).forEach(it => {
+      if (LEADGEN_NAMES.has(it.name.toLowerCase())) {
+        brk.leadgen.amount += it.amount; brk.leadgen.gst += it.gst; brk.leadgen.byQ[q] += it.amount;
+      }
+    });
+  });
+
+  // Sparkline helper: map array of values → SVG polyline points string
+  function sparkPts(vals, x0=8, x1=100, yTop=5, yBot=33) {
+    const min = Math.min(...vals), max = Math.max(...vals), range = max-min||1;
+    const step = (x1-x0)/(vals.length-1);
+    return vals.map((v,i) => {
+      const x = (x0 + i*step).toFixed(1);
+      const y = (yTop + (1-(v-min)/range)*(yBot-yTop)).toFixed(1);
+      return x+','+y;
+    }).join(' ');
+  }
+
+  // ── 1. Quarter sparkline cards ───────────────────────────────────────────
+  const qSparkHTML = ['Q1','Q2','Q3','Q4'].map(q => {
+    const qd = fin.quarters[q], col = QCOLORS[q];
+    // Build mini sparkline from category totals (ordered by CAT_ORDER)
+    const vals = CAT_ORDER.map(c => (qd.categories[c]||{}).total||0).filter(v=>v>0);
+    const pts = vals.length >= 2 ? sparkPts(vals) : '8,33 100,5';
+    const polyPts = '8,36 ' + pts + ' 100,36';
+    const gnet = qd.gstPayable;
+    const gCol = gnet >= 0 ? '#FCA5A5' : '#6EE7B7';
+    const gTxt = gnet >= 0 ? '+'+fmtMoneyDec(gnet)+' payable' : fmtMoneyDec(Math.abs(gnet))+' refund';
+    return '<div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.07)">'
+      + '<div style="padding:12px 14px 6px;border-top:3px solid '+col+'">'
+      + '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">'+q+' · '+qd.months[0].slice(0,3)+'–'+qd.months[2].slice(0,3)+'</div>'
+      + '<div style="font-size:1.25rem;font-weight:800;color:'+col+'">'+fmtMoney(qd.totalExpenses)+'</div>'
+      + '<div style="font-size:.67rem;color:'+gCol+';margin-top:2px">GST: '+gTxt+'</div>'
+      + '</div>'
+      + '<svg viewBox="0 0 108 36" width="100%" height="36" preserveAspectRatio="none" style="display:block">'
+      + '<polygon points="'+polyPts+'" fill="'+col+'" opacity=".15"/>'
+      + '<polyline points="'+pts+'" fill="none" stroke="'+col+'" stroke-width="1.8"/>'
+      + '</svg></div>';
+  }).join('');
+  const sparkSection = '<div class="card card-full" style="background:transparent;border:none;box-shadow:none;padding:0">'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'+qSparkHTML+'</div></div>';
+
+  // ── 2. GST dark bar (Option A) ───────────────────────────────────────────
+  const gstCells = ['Q1','Q2','Q3','Q4'].map(q => {
+    const net = fin.quarters[q].gstPayable, pos = net >= 0;
+    const col = pos ? '#FCA5A5' : '#6EE7B7';
+    const bgRgb = pos ? '252,165,165' : '110,231,183';
+    return '<div style="padding:14px 16px;border-right:1px solid rgba(255,255,255,.12);text-align:center">'
+      + '<div style="font-size:1.15rem;font-weight:800;color:'+col+';line-height:1;margin-bottom:4px">'+fmtMoneyDec(Math.abs(net))+'</div>'
+      + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.55)">'+q+' Net GST</div>'
+      + '<div style="font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:8px;margin-top:5px;display:inline-block;background:rgba('+bgRgb+',.15);color:'+col+'">'+( pos?'payable':'refund')+'</div>'
+      + '</div>';
+  }).join('');
+  const ytdNet = fin.ytd.gstPayable, ytdPos = ytdNet >= 0;
+  const ytdCol = ytdPos ? '#FCA5A5' : '#6EE7B7';
+  const ytdRgb = ytdPos ? '252,165,165' : '110,231,183';
+  const gstSection = '<div class="card card-full" style="padding:0;overflow:hidden">'
+    + '<div style="background:#1B3A6B;display:grid;grid-template-columns:repeat(5,1fr)">'
+    + gstCells
+    + '<div style="padding:14px 16px;text-align:center;background:rgba(0,0,0,.12)">'
+    + '<div style="font-size:1.15rem;font-weight:800;color:'+ytdCol+';line-height:1;margin-bottom:4px">'+fmtMoneyDec(Math.abs(ytdNet))+'</div>'
+    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.55)">YTD Net GST</div>'
+    + '<div style="font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:8px;margin-top:5px;display:inline-block;background:rgba('+ytdRgb+',.15);color:'+ytdCol+'">'+(ytdPos?'remit to CRA':'CRA refund')+'</div>'
+    + '</div></div></div>';
+
+  // ── 3. Main category tiles ────────────────────────────────────────────────
+  const catYTD = {};
+  CAT_ORDER.forEach(c => { catYTD[c] = {amount:0,gst:0}; });
+  ['Q1','Q2','Q3','Q4'].forEach(q => {
+    CAT_ORDER.forEach(c => {
+      const cd = (fin.quarters[q].categories||{})[c];
+      if (cd) { catYTD[c].amount += cd.total; catYTD[c].gst += cd.gst; }
+    });
+  });
+  const maxCatAmt = Math.max(...Object.values(catYTD).map(c => c.amount));
+  const totalExp = fin.ytd.totalExpenses;
+  const SHOW_CATS = ['BROKERAGE','ADVERTISING','GENERAL','AUTO EXPENSE','HOME OFFICE','SUPPLIES'];
+  const catTiles = SHOW_CATS.map(cat => {
+    const cd = catYTD[cat]; if (!cd||cd.amount===0) return '';
+    const pct = Math.round(cd.amount/totalExp*100);
+    const barW = Math.round(cd.amount/maxCatAmt*100);
+    const col = CAT_COLORS[cat]||'#6B7280';
+    return '<div style="padding:14px;border-right:1px solid var(--border);border-left:4px solid '+col+'">'
+      + '<div style="font-size:1.1rem;margin-bottom:6px">'+(CAT_ICONS[cat]||'📁')+'</div>'
+      + '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:2px">'+cat+'</div>'
+      + '<div style="font-size:1rem;font-weight:800;color:'+col+'">'+fmtMoney(cd.amount)+'</div>'
+      + '<div style="margin-top:7px;height:4px;background:#F3F4F6;border-radius:2px;overflow:hidden">'
+      + '<div style="width:'+barW+'%;height:100%;background:'+col+';border-radius:2px"></div></div>'
+      + '<div style="font-size:.63rem;color:#9CA3AF;margin-top:3px">'+pct+'% of total</div>'
+      + '</div>';
+  }).join('');
+  const catSection = '<div class="card card-full" style="padding:0;overflow:hidden">'
+    + '<div style="padding:10px 16px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)">Expense Categories — YTD · '+fmtMoney(totalExp)+' total</div>'
+    + '</div><div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0">'+catTiles+'</div></div>';
+
+  // ── 4. Breakout tiles ─────────────────────────────────────────────────────
+  const brkMax = Math.max(brk.dividends.amount, brk.leadgen.amount, brk.meals.amount, brk.gifts.amount);
+  function brkTile(icon, label, note, color, key) {
+    const b = brk[key];
+    const barW = brkMax > 0 ? Math.round(b.amount/brkMax*100) : 0;
+    const pct = totalExp > 0 ? Math.round(b.amount/totalExp*100) : 0;
+    const qBreakdown = ['Q1','Q2','Q3','Q4'].filter(q=>b.byQ[q]>0).map(q=>q+': '+fmtMoney(b.byQ[q])).join(' · ');
+    return '<div style="background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-top:3px solid '+color+'">'
+      + '<div style="font-size:1.1rem;margin-bottom:5px">'+icon+'</div>'
+      + '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:2px">'+label+'</div>'
+      + '<div style="font-size:1.1rem;font-weight:800;color:'+color+'">'+fmtMoney(b.amount)+'</div>'
+      + '<div style="margin-top:6px;height:4px;background:#F3F4F6;border-radius:2px;overflow:hidden">'
+      + '<div style="width:'+barW+'%;height:100%;background:'+color+';border-radius:2px"></div></div>'
+      + '<div style="font-size:.63rem;color:#9CA3AF;margin-top:3px">'+pct+'% of total'+(b.gst>0?' · GST '+fmtMoneyDec(b.gst):'')+'</div>'
+      + '<div style="font-size:.65rem;color:#6B7280;margin-top:4px;line-height:1.3">'+note+'</div>'
+      + (qBreakdown ? '<div style="font-size:.63rem;color:#9CA3AF;margin-top:4px">'+qBreakdown+'</div>' : '')
+      + '</div>';
+  }
+  const brkSection = '<div class="card card-full" style="padding:0;overflow:hidden">'
+    + '<div style="padding:10px 16px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)">Breakouts at a Glance</div>'
+    + '</div>'
+    + '<div style="padding:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'
+    + brkTile('💸','Aaron Dividends','Personal draws · tracked in Admin','#EC4899','dividends')
+    + brkTile('🍽️','Meals, Ent. & Spirits','Combined · from General','#8B5CF6','meals')
+    + brkTile('🎁','Client Gifts','From General · CRA $25/person limit','#F59E0B','gifts')
+    + brkTile('📲','Online Lead Gen','FB + REW + CINC/Sync · from Advertising','#3B82F6','leadgen')
+    + '</div></div>';
+
+  // ── 5. Quarter detail cards ───────────────────────────────────────────────
+  const qCards = ['Q1','Q2','Q3','Q4'].map(q => {
+    const qd = fin.quarters[q], col = QCOLORS[q];
+    const maxCQ = Math.max(...CAT_ORDER.map(c=>(qd.categories[c]||{}).total||0));
+    const catRows = CAT_ORDER.map(cat => {
+      const cd = qd.categories[cat]; if (!cd||cd.total===0) return '';
+      const bw = maxCQ>0?Math.round(cd.total/maxCQ*100):0;
+      const cc = CAT_COLORS[cat]||'#6B7280';
+      return '<div style="padding:7px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">'
+        + '<div style="font-size:.66rem;font-weight:700;color:'+cc+';width:90px;flex-shrink:0">'+cat+'</div>'
+        + '<div style="flex:1;height:5px;background:#F3F4F6;border-radius:3px;overflow:hidden">'
+        + '<div style="width:'+bw+'%;height:100%;background:'+cc+';border-radius:3px"></div></div>'
+        + '<div style="font-size:.72rem;font-weight:700;width:65px;text-align:right">'+fmtMoney(cd.total)+'</div>'
+        + '</div>';
+    }).join('');
+    const gnet = qd.gstPayable;
+    const gCls = gnet>=0?'color:#DC2626':'color:#059669';
+    return '<div class="card">'
+      + '<div class="card-header" style="border-left-color:'+col+'">'
+      + '<div class="card-title"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+col+';margin-right:6px"></span>'+q+' · '+qd.months[0].slice(0,3)+'–'+qd.months[2].slice(0,3)+'</div>'
+      + '<span style="font-size:.85rem;font-weight:700;color:'+col+'">'+fmtMoney(qd.totalExpenses)+'</span>'
+      + '</div>'
+      + catRows
+      + '<div style="padding:7px 14px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center;font-size:.7rem">'
+      + '<span style="color:var(--muted)">GST Paid: '+fmtMoneyDec(qd.totalGstPaid)+'</span>'
+      + '<span style="'+gCls+';font-weight:700">Net: '+(gnet>=0?fmtMoneyDec(gnet):'('+fmtMoneyDec(Math.abs(gnet))+')')+'</span>'
+      + '</div>'
+      + '<div style="padding:6px 14px 10px;display:flex;justify-content:flex-end">'
+      + '<button onclick="openFinModal(\''+q+'\')" style="font-size:.7rem;padding:4px 12px;background:var(--teal);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">+ Add Entry</button>'
+      + '</div></div>';
+  }).join('');
+
+  el.innerHTML = sparkSection + gstSection + catSection + brkSection + qCards;
+}
+
+function openFinModal(q) {
+  const sel = document.getElementById('feQuarter');
+  if (sel && q) sel.value = q;
+  document.getElementById('finEditOverlay').style.display = 'flex';
+}
+function closeFinModal() { document.getElementById('finEditOverlay').style.display = 'none'; }
+function saveFinEntry() {
+  const q   = document.getElementById('feQuarter').value;
+  const cat = document.getElementById('feCategory').value;
+  const item= document.getElementById('feItem').value.trim();
+  const amt = parseFloat(document.getElementById('feAmount').value)||0;
+  const gst = parseFloat(document.getElementById('feGst').value)||0;
+  if (!item||amt<=0){showToast('Enter a description and amount');return;}
+  const ov = getFinOverrides();
+  ov.push({quarter:q,category:cat,item,amount:amt,gst,added:new Date().toISOString()});
+  localStorage.setItem(FIN_OVERRIDE_KEY,JSON.stringify(ov));
+  closeFinModal();
+  buildFinancials();
+  showToast('✓ Entry added — update your Excel for the permanent record');
+  ['feItem','feAmount','feGst'].forEach(id=>{document.getElementById(id).value='';});
+}
+
+// ── GOALS vs ACTUAL ─────────────────────────────────────────────────────────
+function buildGoalsPanel() {
+  const el = document.getElementById('bodyGoalsPanel');
+  if (!el) return;
+  const g = (window.DASH_GOALS || {}).goals || {};
+  const biz = (window.DASH_BIZPLAN || {}).sales || {};
+
+  const incGoal   = g.incomeGoal   || 360000;
+  const dealGoal  = g.dealGoal     || 24;
+  const volGoal   = g.volumeGoal   || 28000000;
+  const avgComm   = g.avgCommission|| 15000;
+  const lstGoal   = g.listingDeals || 14;
+  const buyGoal   = g.buyerDeals   || 10;
+  const wkAppt    = g.weeklyApptGoal || 2;
+  const dolPerAppt= g.dollarPerAppt  || 4643;
+  const lstAppts  = g.listingAppts   || 20;
+  const totalAppts= g.totalAppts     || 78;
+
+  const gciPaid   = biz.ytdGciPaid      || 0;
+  const gciProj   = biz.ytdGciProjected || 0;
+  const deals     = biz.ytdDeals        || 0;
+  const vol       = biz.ytdVolume       || 0;
+  const dealsList = (biz.deals || []).filter(d => d.commPaid && d.commPaid > 0);
+  const lstClosed = dealsList.filter(d => d.type === 'Seller').length;
+  const buyClosed = dealsList.filter(d => d.type === 'Buyer').length;
+
+  function pct(actual, goal) { return goal > 0 ? Math.min(100, Math.round(actual/goal*100)) : 0; }
+  function fmt$(n) { return '$' + Math.round(n).toLocaleString('en-CA'); }
+  function fmtDec(n) { return '$' + n.toLocaleString('en-CA', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function ring(pctVal, color) {
+    const r = 22, circ = 2*Math.PI*r, dash = circ*(pctVal/100), gap = circ - dash;
+    return '<svg width="60" height="60" viewBox="0 0 60 60">'
+      + '<circle cx="30" cy="30" r="'+r+'" fill="none" stroke="#F3F4F6" stroke-width="6"/>'
+      + '<circle cx="30" cy="30" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="6"'
+      + ' stroke-dasharray="'+dash.toFixed(1)+' '+gap.toFixed(1)+'" stroke-linecap="round"'
+      + ' transform="rotate(-90 30 30)"/>'
+      + '<text x="30" y="34" text-anchor="middle" font-size="11" font-weight="800" fill="'+color+'">'+pctVal+'%</text>'
+      + '</svg>';
+  }
+  function progBar(actual, goal, color, label, actualFmt, goalFmt) {
+    const p = pct(actual, goal);
+    return '<div style="margin-bottom:12px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">'
+      + '<span style="font-size:.72rem;font-weight:600;color:var(--text)">'+label+'</span>'
+      + '<span style="font-size:.7rem;color:var(--muted)">'+actualFmt+' / '+goalFmt+'</span>'
+      + '</div>'
+      + '<div style="height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden">'
+      + '<div style="width:'+p+'%;height:100%;background:'+color+';border-radius:4px;transition:width .4s"></div>'
+      + '</div>'
+      + '<div style="font-size:.64rem;color:'+color+';margin-top:2px;text-align:right">'+p+'% of goal</div>'
+      + '</div>';
+  }
+
+  const pctGci  = pct(gciPaid,  incGoal);
+  const pctProj = pct(gciProj,  incGoal);
+  const pctDeal = pct(deals,    dealGoal);
+  const pctVol  = pct(vol,      volGoal);
+
+  // KPI top row
+  const kpiRow = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid var(--border)">'
+    + kpi('💰','Income Paid',fmt$(gciPaid),fmt$(incGoal),'#059669',pctGci)
+    + kpi('📈','Incl. Pipeline',fmt$(gciProj),fmt$(incGoal),'#3B82F6',pctProj)
+    + kpi('🤝','Deals Closed',deals+' deals',dealGoal+' goal','#8B5CF6',pctDeal)
+    + kpi('🏡','Volume',fmt$(vol),fmt$(volGoal),'#F59E0B',pctVol)
+    + '</div>';
+
+  function kpi(icon, label, actual, goal, color, pctVal) {
+    return '<div style="padding:16px 18px;border-right:1px solid var(--border)">'
+      + '<div style="display:flex;align-items:center;gap:12px">'
+      + ring(pctVal, color)
+      + '<div>'
+      + '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF">'+icon+' '+label+'</div>'
+      + '<div style="font-size:1.15rem;font-weight:800;color:'+color+';line-height:1.2">'+actual+'</div>'
+      + '<div style="font-size:.68rem;color:#9CA3AF">Goal: '+goal+'</div>'
+      + '</div></div>'
+      + '<div style="margin-top:8px;height:4px;background:#F3F4F6;border-radius:2px;overflow:hidden">'
+      + '<div style="width:'+pctVal+'%;height:100%;background:'+color+';border-radius:2px"></div>'
+      + '</div></div>';
+  }
+
+  // Deal breakdown & activity goals
+  const detailCols = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0">'
+
+    // Left: deal breakdown
+    + '<div style="padding:16px 18px;border-right:1px solid var(--border)">'
+    + '<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px">Deal Breakdown</div>'
+    + progBar(lstClosed, lstGoal,   '#10B981', '🏠 Listings Sold',   lstClosed+' closed', lstGoal+' goal')
+    + progBar(buyClosed, buyGoal,   '#3B82F6', '🚗 Buyer Sales',     buyClosed+' closed', buyGoal+' goal')
+    + progBar(deals,     dealGoal,  '#8B5CF6', '📋 Total Ends',      deals+' closed',     dealGoal+' goal')
+    + '</div>'
+
+    // Right: activity & rate metrics
+    + '<div style="padding:16px 18px">'
+    + '<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px">Activity & Rate Goals</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + metricTile('📅','Weekly Appt Goal',wkAppt+'/wk','Listing & buyer appts','#F59E0B')
+    + metricTile('📲','Listing Appts Needed',lstAppts,'To achieve '+lstGoal+' listings','#3B82F6')
+    + metricTile('💵','Avg Commission',fmt$(avgComm),'Per transaction goal','#059669')
+    + metricTile('⚡','$ / Appointment',fmt$(dolPerAppt),'Income value per appt','#EC4899')
+    + '</div></div>'
+    + '</div>';
+
+  function metricTile(icon, label, val, note, color) {
+    return '<div style="background:#F9FAFB;border-radius:8px;padding:10px 12px;border-left:3px solid '+color+'">'
+      + '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF">'+icon+' '+label+'</div>'
+      + '<div style="font-size:1rem;font-weight:800;color:'+color+';line-height:1.2;margin-top:2px">'+val+'</div>'
+      + '<div style="font-size:.62rem;color:#9CA3AF;margin-top:2px">'+note+'</div>'
+      + '</div>';
+  }
+
+  el.innerHTML = kpiRow + detailCols;
+}
+
 
 loadAllData(); setInterval(()=>location.reload(),300000);
 
